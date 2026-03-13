@@ -27,6 +27,8 @@ api/__pycache__/
 *.swp
 *.swo
 *~
+.README.md.swp
+.Dockerfile.swp
 
 # Docker
 .docker-compose.yml.swp
