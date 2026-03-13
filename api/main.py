@@ -177,7 +177,7 @@ async def convert_file(
                 try:
                     os.unlink(tmp_path)
                 except Exception as cleanup_error:
-                    if verbose:
+                    if API_DEBUG:
                         print(f"清理臨時文件失敗：{cleanup_error}")
     
     except Exception as e:
