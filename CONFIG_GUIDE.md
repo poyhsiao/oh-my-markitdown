@@ -1,6 +1,11 @@
 # MarkItDown API 配置指南 📝
 
+> **基於：** [microsoft/markitdown](https://github.com/microsoft/markitdown)  
+> **Original Project:** [microsoft/markitdown](https://github.com/microsoft/markitdown)
+
 本指南幫助你快速配置 MarkItDown API 環境變數。
+
+**[🇹🇼 繁體中文版](CONFIG_GUIDE_ZH_TW.md)** | **[🇺🇸 English](CONFIG_GUIDE_EN.md)** *(Coming Soon)*
 
 ---
 

@@ -1,6 +1,11 @@
 # 自動轉換功能說明 🤖
 
+> **基於：** [microsoft/markitdown](https://github.com/microsoft/markitdown)  
+> **Original Project:** [microsoft/markitdown](https://github.com/microsoft/markitdown)
+
 MarkItDown API 支援**自動監控目錄**功能，當你把文件放入 `input/` 目錄後，會自動轉換為 Markdown 並輸出到 `output/` 目錄！
+
+**[🇹🇼 繁體中文版](AUTO_CONVERT_ZH_TW.md)** | **[🇺🇸 English](AUTO_CONVERT_EN.md)** *(Coming Soon)*
 
 ---
 

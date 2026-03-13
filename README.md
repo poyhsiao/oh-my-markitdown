@@ -1,456 +1,377 @@
 # MarkItDown API Docker 🐳🚀
 
-透過 HTTP API 將各種文件格式轉換為 Markdown，支援 **7 種亞洲語言 OCR**！
+> **Based on:** [microsoft/markitdown](https://github.com/microsoft/markitdown)  
+> **Original Project:** Microsoft MarkItDown - Python tool for converting various files to Markdown
 
-## 📋 目錄
+Convert various file formats to Markdown via HTTP API with multi-language OCR support for 7 Asian languages!
 
-- [特色功能](#-特色功能)
-- [支援的文件格式](#-支援的文件格式)
-- [OCR 多語言支援](#-ocr-多語言支援)
-- [快速開始](#-快速開始)
-- [環境變數配置](#-環境變數配置)
-- [API 使用說明](#-api-使用說明)
-- [自動轉換功能](#-自動轉換功能) ✨
-- [程式碼範例](#-程式碼範例)
-- [進階配置](#-進階配置)
-- [故障排除](#-故障排除)
+**[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README.md)**
 
 ---
 
-## ✨ 特色功能
+## 📋 Table of Contents
 
-- ✅ **7 種亞洲語言 OCR**：繁中、簡中、英文、日文、韓文、泰文、越南文
-- ✅ **即時轉換**：上傳文件後立即回傳 Markdown
-- ✅ **雙格式輸出**：支援 `markdown` 或 `json` 格式
-- ✅ **環境變數配置**：端口、路徑、OCR 預設語言皆可自訂
-- ✅ **批量處理**：支援目錄批量轉換
-- ✅ **自動監控轉換**：放入 `input/` 目錄自動轉換到 `output/` ✨
-- ✅ **命令行工具**：靈活的 CLI，支持文件/URL/批量處理 ✨
-- ✅ **Swagger UI**：完整的互動式 API 文件
-- ✅ **健康檢查**：內建健康檢查端點
-- ✅ **資源限制**：可調整記憶體、CPU 限制
-
----
-
-## 📦 支援的文件格式
-
-| 類型 | 格式 |
-|------|------|
-| **文件** | PDF、Word (DOCX/DOC)、PowerPoint (PPTX/PPT)、Excel (XLSX/XLS)、Outlook (MSG) |
-| **網頁** | HTML、URL（含 YouTube 字幕） |
-| **圖片** | JPG、PNG、GIF、WEBP、BMP、TIFF（含 EXIF 元數據 + 多語言 OCR） |
-| **音頻** | MP3、WAV、M4A、FLAC、OGG（含語音轉錄） |
-| **資料** | CSV、JSON、XML |
-| **其他** | ZIP（遍歷內容）、EPub |
-
-### 已安裝的系統依賴
-
-| 工具/庫 | 用途 |
-|---------|------|
-| `poppler-utils` | PDF 處理（pdfminer.six, pdfplumber） |
-| `exiftool` | 圖片/音頻 EXIF 元數據提取 |
-| `tesseract-ocr` + 語言包 | 多語言 OCR（7 種亞洲語言） |
-| `ffmpeg` | 音頻處理（pydub, SpeechRecognition） |
-| `fonts-liberation` / `fonts-noto-cjk` | 字體支持（CJK 字符） |
-| `libxml2-dev` / `libxslt1-dev` | Office 文件處理（mammoth, lxml） |
-| `build-essential` | Python 依賴構建工具 |
+- [Features](#-features)
+- [Supported Formats](#-supported-formats)
+- [OCR Multi-Language Support](#-ocr-multi-language-support)
+- [Quick Start](#-quick-start)
+- [Environment Variables](#-environment-variables)
+- [API Usage](#-api-usage)
+- [Auto-Convert Feature](#-auto-convert-feature)
+- [CLI Tool](#-cli-tool)
+- [Code Examples](#-code-examples)
+- [Advanced Configuration](#-advanced-configuration)
+- [Troubleshooting](#-troubleshooting)
 
 ---
 
-## 🔤 OCR 多語言支援
+## ✨ Features
 
-| 語言代碼 | 語言 | 文字系統 | 適用場景 |
-|----------|------|----------|----------|
-| `chi_tra` | 繁體中文 | 繁體漢字 | 台灣、香港、澳門文件 |
-| `chi_sim` | 簡體中文 | 簡體漢字 | 中國大陸文件 |
-| `eng` | 英文 | 拉丁字母 | 英文文件 |
-| `jpn` | 日文 | 漢字 + 假名 | 日本語文件 |
-| `kor` | 韓文 | 諺文 (Hangul) | 한국어 文件 |
-| `tha` | 泰文 | 泰文字母 | ภาษาไทย 文件 |
-| `vie` | 越南文 | 國語字 | Tiếng Việt 文件 |
-
-### 組合使用
-
-使用 `+` 符號組合多種語言：
-
-| 語言組合 | 說明 |
-|----------|------|
-| `chi_tra+eng` | 繁體中文 + 英文（**預設**） |
-| `chi_sim+eng` | 簡體中文 + 英文 |
-| `chi_tra+jpn+kor+eng` | 東北亞多語言混合 |
-| `tha+eng` | 泰文 + 英文 |
-| `vie+eng` | 越南文 + 英文 |
-| `chi_tra+tha+vie+eng` | 東南亞多語言混合 |
-| `chi_tra+chi_sim+eng+jpn+kor+tha+vie` | **完整亞洲語言（7 種全開）** |
+- ✅ **7 Asian Language OCR**: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese
+- ✅ **Instant Conversion**: Upload files and get Markdown immediately
+- ✅ **Dual Format Output**: Support `markdown` or `json` format
+- ✅ **Environment Variables**: Configurable ports, paths, OCR languages
+- ✅ **Batch Processing**: Support directory batch conversion
+- ✅ **Auto-Monitoring**: Automatically convert files in `input/` to `output/` ✨
+- ✅ **CLI Tool**: Flexible command-line tool for files/URLs/batch processing ✨
+- ✅ **Swagger UI**: Complete interactive API documentation
+- ✅ **Health Checks**: Built-in health check endpoints
+- ✅ **Resource Limits**: Adjustable memory and CPU limits
 
 ---
 
-## 🚀 快速開始
+## 📦 Supported Formats
 
-### 1. 克隆專案
+| Type | Formats |
+|------|---------|
+| **Documents** | PDF, Word (DOCX/DOC), PowerPoint (PPTX/PPT), Excel (XLSX/XLS), Outlook (MSG) |
+| **Web** | HTML, URLs (including YouTube subtitles) |
+| **Images** | JPG, PNG, GIF, WEBP, BMP, TIFF (with EXIF + Multi-language OCR) |
+| **Audio** | MP3, WAV, M4A, FLAC, OGG (with speech transcription) |
+| **Data** | CSV, JSON, XML |
+| **Other** | ZIP (iterate contents), EPub |
+
+### Installed System Dependencies
+
+| Tool/Library | Purpose |
+|--------------|---------|
+| `poppler-utils` | PDF processing (pdfminer.six, pdfplumber) |
+| `exiftool` | Image/Audio EXIF metadata extraction |
+| `tesseract-ocr` + language packs | Multi-language OCR (7 Asian languages) |
+| `ffmpeg` | Audio processing (pydub, SpeechRecognition) |
+| `fonts-liberation` / `fonts-noto-cjk` | Font support (CJK characters) |
+| `libxml2-dev` / `libxslt1-dev` | Office file processing (mammoth, lxml) |
+| `build-essential` | Python dependency build tools |
+
+---
+
+## 🔤 OCR Multi-Language Support
+
+| Language Code | Language | Writing System | Use Case |
+|---------------|----------|----------------|----------|
+| `chi_tra` | Traditional Chinese | Traditional Han | Taiwan, Hong Kong, Macau |
+| `chi_sim` | Simplified Chinese | Simplified Han | Mainland China |
+| `eng` | English | Latin | English documents |
+| `jpn` | Japanese | Kanji + Kana | Japanese documents |
+| `kor` | Korean | Hangul | Korean documents |
+| `tha` | Thai | Thai Script | Thai documents |
+| `vie` | Vietnamese | Quoc Ngu | Vietnamese documents |
+
+### Language Combinations
+
+Use `+` to combine multiple languages:
+
+| Combination | Description |
+|-------------|-------------|
+| `chi_tra+eng` | Traditional Chinese + English (**Default**) |
+| `chi_sim+eng` | Simplified Chinese + English |
+| `chi_tra+jpn+kor+eng` | Northeast Asian multi-language |
+| `tha+eng` | Thai + English |
+| `vie+eng` | Vietnamese + English |
+| `chi_tra+tha+vie+eng` | Southeast Asian multi-language |
+| `chi_tra+chi_sim+eng+jpn+kor+tha+vie` | **Complete Asian (all 7 languages)** |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
 
 ```bash
 cd /Users/kimhsiao/git/kimhsiao/markitdown-kim
 ```
 
-### 2. 配置環境變數（可選）
+### 2. Configure Environment Variables (Optional)
 
 ```bash
-# 複製範例配置（第一次需要）
+# Copy example configuration (first time only)
 cp .env.example .env
 
-# 編輯配置（根據需求調整端口、OCR 語言等）
+# Edit configuration (adjust port, OCR language, etc.)
 nano .env
-# 或使用其他編輯器
+# or
 vim .env
+# or
 code .env
 ```
 
-**📝 提示：** `.env.example` 文件包含詳細註解，建議先閱讀！
+**📝 Tip:** `.env.example` contains detailed comments, recommended to read first!
 
-### 3. 建置並啟動服務
+### 3. Build and Start Services
 
 ```bash
-# 建置 Docker 映像（首次需要約 8-15 分鐘，包含所有依賴）
+# Build Docker image (first time takes ~8-15 minutes)
 docker compose build
 
-# 啟動服務
+# Start services
 docker compose up -d
 
-# 查看日誌
+# View logs
 docker compose logs -f
 ```
 
-服務將在 **http://localhost:51083** 啟動（或你在 `.env` 中設置的端口）！
+Services will start at **http://localhost:51083** (or your configured port)!
 
-**注意：** 首次建置會安裝所有系統依賴和 Python 包，包括：
-- Tesseract OCR + 7 種亞洲語言包
-- exiftool（EXIF 元數據提取）
-- ffmpeg（音頻處理）
-- poppler-utils（PDF 處理）
-- MarkItDown 所有可選依賴
+**Note:** First build installs all system dependencies and Python packages including:
+- Tesseract OCR + 7 Asian language packs
+- exiftool (EXIF metadata extraction)
+- ffmpeg (audio processing)
+- poppler-utils (PDF processing)
+- All MarkItDown optional dependencies
 
-### 4. 測試服務
+### 4. Test Services
 
 ```bash
-# 健康檢查
+# Health check
 curl http://localhost:51083/health
 
-# 查看支援格式
+# View supported formats
 curl http://localhost:51083/formats
 
-# 查看 OCR 語言支援
+# View OCR language support
 curl http://localhost:51083/ocr-languages
 
-# 查看當前配置
+# View current configuration
 curl http://localhost:51083/config
 ```
 
-### 5. 測試依賴（可選）
+### 5. Test Dependencies (Optional)
 
 ```bash
-# 測試所有系統依賴和 Python 包是否正常
+# Test all system dependencies and Python packages
 ./scripts/test-deps.sh
 
-# 或手動進入容器檢查
+# Or manually check inside container
 docker compose exec markitdown-api bash
 
-# 在容器內檢查
-tesseract --list-langs    # 查看 OCR 語言包
-exiftool -ver             # 查看 exiftool 版本
-ffmpeg -version           # 查看 ffmpeg 版本
-pip list                  # 查看 Python 包
+# Check inside container
+tesseract --list-langs    # View OCR language packs
+exiftool -ver             # View exiftool version
+ffmpeg -version           # View ffmpeg version
+pip list                  # View Python packages
 ```
 
 ---
 
-## 🤖 自動轉換功能
+## ⚙️ Environment Variables
 
-### 啟用自動監控
-
-把文件放入 `input/` 目錄，會自動轉換為 Markdown 並輸出到 `output/`！
+### Quick Start
 
 ```bash
-# 1. 確認 .env 配置
-AUTO_ENABLED=true
-AUTO_POLL_INTERVAL=5
-
-# 2. 啟動服務
-docker compose up -d
-
-# 3. 放入文件
-cp document.pdf input/
-
-# 4. 等待幾秒，查看輸出
-ls output/
-# 輸出：document.md
-```
-
-**詳細說明請參考：** [AUTO_CONVERT.md](AUTO_CONVERT.md)
-
----
-
-## 💻 命令行工具（CLI）
-
-### 快速使用
-
-```bash
-# 轉換單一文件
-./markitdown document.pdf output.md
-
-# 從 URL 轉換
-./markitdown --url https://example.com output.md
-
-# 批量轉換
-./markitdown *.pdf -o ./output/
-
-# 查看幫助
-./markitdown --help
-```
-
-### 常用選項
-
-| 選項 | 說明 |
-|------|------|
-| `-o, --output DIR` | 輸出目錄 |
-| `-u, --url URL` | 從 URL 轉換 |
-| `--ocr-lang LANG` | OCR 語言（預設：chi_tra+eng） |
-| `--no-plugins` | 禁用插件 |
-| `-v, --verbose` | 詳細輸出 |
-| `--stdout` | 輸出到 stdout |
-
-**詳細說明請參考：** [CLI_USAGE.md](CLI_USAGE.md)
-
-### 配置選項
-
-| 配置 | 預設值 | 說明 |
-|------|--------|------|
-| `AUTO_ENABLED` | `true` | 是否啟用自動轉換 |
-| `AUTO_POLL_INTERVAL` | `5` | 監控間隔（秒） |
-| `AUTO_ENABLE_PLUGINS` | `true` | 是否啟用 OCR |
-| `AUTO_OCR_LANG` | `chi_tra+eng` | OCR 語言 |
-| `AUTO_MOVE_SOURCE` | `false` | 轉換後移動源文件 |
-
-### 查看日誌
-
-```bash
-# 查看自動轉換服務日誌
-docker compose logs -f markitdown-auto
-```
-
----
-
-## ⚙️ 環境變數配置
-
-### 快速開始
-
-```bash
-# 1. 複製範例配置
+# 1. Copy example configuration
 cp .env.example .env
 
-# 2. 編輯配置（使用你喜歡的編輯器）
+# 2. Edit configuration
 nano .env
-# 或
-vim .env
-# 或
-code .env
 
-# 3. 重啟服務使配置生效
+# 3. Restart services
 docker compose restart
 ```
 
-### 完整配置清單
+### Complete Configuration List
 
-| 變數名稱 | 預設值 | 說明 |
-|----------|--------|------|
-| **🌐 API 端口** |
-| `API_PORT` | `51083` | 對外暴露的端口（瀏覽器訪問） |
-| `API_PORT_INTERNAL` | `8000` | 容器內部端口（通常不需修改） |
-| `API_HOST` | `0.0.0.0` | API 監聽地址 |
-| `API_DEBUG` | `false` | 調試模式（true/false） |
-| `API_WORKERS` | `1` | Worker 數量（建議：CPU 核心數） |
-| **📁 目錄配置** |
-| `DATA_DIR` | `./data` | 數據持久化目錄 |
-| `INPUT_DIR` | `./input` | 輸入文件目錄（批量處理） |
-| `OUTPUT_DIR` | `./output` | 輸出文件目錄（批量處理） |
-| **🔤 OCR 配置** |
-| `DEFAULT_OCR_LANG` | `chi_tra+eng` | 預設 OCR 語言（見下方說明） |
-| `ENABLE_PLUGINS_BY_DEFAULT` | `false` | 預設啟用插件（true/false） |
-| **📤 上傳限制** |
-| `MAX_UPLOAD_SIZE` | `52428800` | 最大上傳大小（字節，預設 50MB） |
-| **💻 資源限制** |
-| `MEMORY_LIMIT` | `2G` | 記憶體限制 |
-| `MEMORY_RESERVE` | `512M` | 記憶體保留 |
-| `CPU_LIMIT` | `2.0` | CPU 限制（核心數） |
-| `CPU_RESERVE` | `0.5` | CPU 保留 |
-| **🏥 健康檢查** |
-| `HEALTHCHECK_INTERVAL` | `30s` | 健康檢查間隔 |
-| `HEALTHCHECK_TIMEOUT` | `10s` | 健康檢查超時 |
-| `HEALTHCHECK_RETRIES` | `3` | 重試次數 |
-| `HEALTHCHECK_START_PERIOD` | `40s` | 啟動寬限期 |
-| **📝 日誌配置** |
-| `LOG_MAX_SIZE` | `10m` | 日誌文件最大大小 |
-| `LOG_MAX_FILE` | `3` | 日誌文件最大數量 |
-| **🤖 OpenAI（可選）** |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| **🌐 API Ports** |
+| `API_PORT` | `51083` | External exposed port (browser access) |
+| `API_PORT_INTERNAL` | `8000` | Internal container port |
+| `API_HOST` | `0.0.0.0` | API listen address |
+| `API_DEBUG` | `false` | Debug mode (true/false) |
+| `API_WORKERS` | `1` | Worker count (recommend: CPU cores) |
+| **📁 Directory Config** |
+| `DATA_DIR` | `./data` | Data persistence directory |
+| `INPUT_DIR` | `./input` | Input file directory (batch processing) |
+| `OUTPUT_DIR` | `./output` | Output file directory (batch processing) |
+| **🔤 OCR Config** |
+| `DEFAULT_OCR_LANG` | `chi_tra+eng` | Default OCR language |
+| `ENABLE_PLUGINS_BY_DEFAULT` | `false` | Enable plugins by default |
+| **📤 Upload Limits** |
+| `MAX_UPLOAD_SIZE` | `52428800` | Max upload size (bytes, default 50MB) |
+| **💻 Resource Limits** |
+| `MEMORY_LIMIT` | `2G` | Memory limit |
+| `MEMORY_RESERVE` | `512M` | Memory reservation |
+| `CPU_LIMIT` | `2.0` | CPU limit (cores) |
+| `CPU_RESERVE` | `0.5` | CPU reservation |
+| **🏥 Health Checks** |
+| `HEALTHCHECK_INTERVAL` | `30s` | Health check interval |
+| `HEALTHCHECK_TIMEOUT` | `10s` | Health check timeout |
+| `HEALTHCHECK_RETRIES` | `3` | Retry count |
+| `HEALTHCHECK_START_PERIOD` | `40s` | Start period |
+| **📝 Logging** |
+| `LOG_MAX_SIZE` | `10m` | Log file max size |
+| `LOG_MAX_FILE` | `3` | Log file max count |
+| **🤖 OpenAI (Optional)** |
 | `OPENAI_API_KEY` | - | OpenAI API Key |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API 端點 |
-| `OPENAI_MODEL` | `gpt-4o` | OpenAI 模型 |
-| **☁️ Azure（可選）** |
-| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | - | Azure Document Intelligence 端點 |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API endpoint |
+| `OPENAI_MODEL` | `gpt-4o` | OpenAI model |
+| **☁️ Azure (Optional)** |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | - | Azure Document Intelligence endpoint |
 | `AZURE_DOCUMENT_INTELLIGENCE_KEY` | - | Azure Document Intelligence Key |
 
-### 常用配置範例
+### Common Configuration Examples
 
-#### 範例 1：更改 API 端口為 8080
+#### Example 1: Change API Port to 8080
 
 ```bash
-# .env 文件
+# .env file
 API_PORT=8080
 
-# 重啟服務
+# Restart services
 docker compose restart
 
-# 現在服務在 http://localhost:8080
+# Now service is at http://localhost:8080
 ```
 
-#### 範例 2：預設使用簡體中文 OCR
+#### Example 2: Default Simplified Chinese OCR
 
 ```bash
-# .env 文件
+# .env file
 DEFAULT_OCR_LANG=chi_sim+eng
 
-# 重啟服務
+# Restart services
 docker compose restart
 ```
 
-#### 範例 3：增加上傳限制到 100MB
+#### Example 3: Increase Upload Limit to 100MB
 
 ```bash
-# .env 文件
+# .env file
 MAX_UPLOAD_SIZE=104857600  # 100MB = 100 * 1024 * 1024
 
-# 重啟服務
+# Restart services
 docker compose restart
 ```
 
-#### 範例 4：啟用 OpenAI 高品質 OCR
+#### Example 4: Enable OpenAI High-Quality OCR
 
 ```bash
-# .env 文件
+# .env file
 OPENAI_API_KEY=sk-proj-your-api-key-here
 OPENAI_MODEL=gpt-4o
 
-# 重啟服務
+# Restart services
 docker compose restart
 
-# 驗證配置
+# Verify configuration
 curl http://localhost:51083/config
 ```
 
-#### 範例 5：增加資源限制（高性能需求）
+#### Example 5: Increase Resource Limits (High Performance)
 
 ```bash
-# .env 文件
+# .env file
 MEMORY_LIMIT=4G
 CPU_LIMIT=4.0
 
-# 重啟服務
+# Restart services
 docker compose restart
 ```
 
-#### 範例 6：主要處理東南亞語言文件
+#### Example 6: Southeast Asian Language Documents
 
 ```bash
-# .env 文件
+# .env file
 DEFAULT_OCR_LANG=chi_tra+tha+vie+eng
 
-# 重啟服務
+# Restart services
 docker compose restart
 ```
 
-#### 範例 7：開啟調試模式（開發環境）
+#### Example 7: Enable Debug Mode (Development)
 
 ```bash
-# .env 文件
+# .env file
 API_DEBUG=true
 
-# 重啟服務
+# Restart services
 docker compose restart
 
-# 現在 API 會返回詳細錯誤信息
+# API now returns detailed error messages
 ```
 
-#### 範例 8：批量處理大量文件
+#### Example 8: Batch Processing Large Files
 
 ```bash
-# .env 文件
+# .env file
 MAX_UPLOAD_SIZE=524288000  # 500MB
 MEMORY_LIMIT=4G
 CPU_LIMIT=4.0
 API_WORKERS=4
 
-# 重啟服務
+# Restart services
 docker compose restart
 ```
 
 ---
 
-### 📋 配置檢查清單
+### 📋 Configuration Checklist
 
-**基本使用（推薦新手）：**
-- [x] `API_PORT=51083`（或你想要的端口）
-- [x] `DEFAULT_OCR_LANG=chi_tra+eng`（根據主要文件語言調整）
+**Basic Usage (Recommended for Beginners):**
+- [x] `API_PORT=51083` (or your preferred port)
+- [x] `DEFAULT_OCR_LANG=chi_tra+eng` (adjust based on document language)
 
-**進階使用：**
-- [ ] `MAX_UPLOAD_SIZE`（如需上傳大於 50MB 的文件）
-- [ ] `MEMORY_LIMIT` 和 `CPU_LIMIT`（如需更高性能）
-- [ ] `OPENAI_API_KEY`（如需使用 OpenAI 高品質 OCR）
+**Advanced Usage:**
+- [ ] `MAX_UPLOAD_SIZE` (if uploading files > 50MB)
+- [ ] `MEMORY_LIMIT` and `CPU_LIMIT` (if higher performance needed)
+- [ ] `OPENAI_API_KEY` (if using OpenAI high-quality OCR)
 
-**生產環境：**
-- [ ] `API_DEBUG=false`（關閉調試模式）
-- [ ] `LOG_MAX_SIZE` 和 `LOG_MAX_FILE`（調整日誌大小）
-- [ ] 健康檢查配置（根據監控需求調整）
-
-#### 範例 4：增加資源限制
-
-```bash
-# .env 文件
-MEMORY_LIMIT=4G
-CPU_LIMIT=4.0
-```
+**Production Environment:**
+- [ ] `API_DEBUG=false` (disable debug mode)
+- [ ] `LOG_MAX_SIZE` and `LOG_MAX_FILE` (adjust log size)
+- [ ] Health check configuration (adjust based on monitoring needs)
 
 ---
 
-## 📡 API 使用說明
+## 📡 API Usage
 
-### API 端點總覽
+### API Endpoints Overview
 
-| 方法 | 端點 | 說明 |
-|------|------|------|
-| `GET` | `/` | API 首頁（版本資訊） |
-| `GET` | `/health` | 健康檢查 |
-| `GET` | `/formats` | 查看支援的文件格式 |
-| `GET` | `/ocr-languages` | 查看 OCR 語言支援 |
-| `GET` | `/config` | 查看當前配置 |
-| `POST` | `/convert` | 上傳文件並轉換 |
-| `POST` | `/convert/url` | 從 URL 轉換 |
-| `GET` | `/docs` | Swagger UI 互動文件 |
-| `GET` | `/redoc` | ReDoc 文件 |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | API Homepage (version info) |
+| `GET` | `/health` | Health check |
+| `GET` | `/formats` | View supported file formats |
+| `GET` | `/ocr-languages` | View OCR language support |
+| `GET` | `/config` | View current configuration |
+| `POST` | `/convert` | Upload file and convert |
+| `POST` | `/convert/url` | Convert from URL |
+| `GET` | `/docs` | Swagger UI interactive docs |
+| `GET` | `/redoc` | ReDoc documentation |
 
 ---
 
-### 1. `POST /convert` - 上傳文件並轉換
+### 1. `POST /convert` - Upload File and Convert
 
-#### 請求範例
+#### Request Example
 
-**基本轉換（使用環境變數預設）：**
+**Basic conversion (using environment variable defaults):**
 ```bash
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@document.pdf" \
   -o output.md
 ```
 
-**指定 OCR 語言：**
+**Specify OCR language:**
 ```bash
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@scanned-doc.pdf" \
@@ -460,7 +381,7 @@ curl -X POST "http://localhost:51083/convert" \
   -o output.md
 ```
 
-**JSON 格式回傳：**
+**JSON format response:**
 ```bash
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@document.pdf" \
@@ -468,23 +389,23 @@ curl -X POST "http://localhost:51083/convert" \
   -o response.json
 ```
 
-#### 請求參數
+#### Request Parameters
 
-| 參數 | 類型 | 必填 | 預設值 | 說明 |
-|------|------|------|--------|------|
-| `file` | File | ✅ | - | 要轉換的文件檔案 |
-| `enable_plugins` | Boolean | ❌ | `ENABLE_PLUGINS_BY_DEFAULT` | 是否啟用插件（OCR） |
-| `ocr_lang` | String | ❌ | `DEFAULT_OCR_LANG` | OCR 語言代碼（可用 `+` 組合） |
-| `return_format` | String | ❌ | `markdown` | 回傳格式：`markdown` 或 `json` |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file` | File | ✅ | - | File to convert |
+| `enable_plugins` | Boolean | ❌ | `ENABLE_PLUGINS_BY_DEFAULT` | Enable plugins (OCR) |
+| `ocr_lang` | String | ❌ | `DEFAULT_OCR_LANG` | OCR language code (combine with `+`) |
+| `return_format` | String | ❌ | `markdown` | Response format: `markdown` or `json` |
 
-#### 回傳格式
+#### Response Format
 
-**Markdown（預設）：**
+**Markdown (Default):**
 - Content-Type: `text/markdown`
-- 直接回傳 Markdown 內容
-- Headers 包含原始檔名、轉換時間、OCR 語言
+- Direct Markdown content
+- Headers include original filename, conversion time, OCR language
 
-**JSON：**
+**JSON:**
 ```json
 {
   "success": true,
@@ -492,94 +413,91 @@ curl -X POST "http://localhost:51083/convert" \
   "file_size": 123456,
   "conversion_time": "2026-03-13T14:30:00",
   "ocr_language": "chi_tra+eng",
-  "content": "# Markdown 內容...",
+  "content": "# Markdown Content...",
   "metadata": {
     "type": "pdf",
     "source": "file",
-    "title": "文件標題",
-    "author": "作者"
+    "title": "Document Title",
+    "author": "Author"
   }
 }
 ```
 
 ---
 
-### 2. `POST /convert/url` - 從 URL 轉換
+### 2. `POST /convert/url` - Convert from URL
 
-#### 請求範例
+#### Request Example
 
 ```bash
 curl -X POST "http://localhost:51083/convert/url?url=https://example.com/article" \
   -o output.md
 ```
 
-**YouTube 字幕抓取：**
+**YouTube subtitle extraction:**
 ```bash
 curl -X POST "http://localhost:51083/convert/url?url=https://www.youtube.com/watch?v=VIDEO_ID" \
   -o transcript.md
 ```
 
-#### 請求參數
+#### Request Parameters
 
-| 參數 | 類型 | 必填 | 預設值 | 說明 |
-|------|------|------|--------|------|
-| `url` | String | ✅ | - | 網頁 URL 或 YouTube URL |
-| `return_format` | String | ❌ | `markdown` | 回傳格式：`markdown` 或 `json` |
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `url` | String | ✅ | - | Web URL or YouTube URL |
+| `return_format` | String | ❌ | `markdown` | Response format: `markdown` or `json` |
 
 ---
 
-### 3. `GET /ocr-languages` - 查看 OCR 語言支援
+### 3. `GET /ocr-languages` - View OCR Language Support
 
-#### 請求範例
+#### Request Example
 
 ```bash
 curl http://localhost:51083/ocr-languages
 ```
 
-#### 回傳範例
+#### Response Example
 
 ```json
 {
   "supported_languages": {
-    "chi_sim": "簡體中文",
-    "chi_tra": "繁體中文",
-    "eng": "英文",
-    "jpn": "日文",
-    "kor": "韓文",
-    "tha": "泰文",
-    "vie": "越南文"
+    "chi_sim": "Simplified Chinese",
+    "chi_tra": "Traditional Chinese",
+    "eng": "English",
+    "jpn": "Japanese",
+    "kor": "Korean",
+    "tha": "Thai",
+    "vie": "Vietnamese"
   },
   "default": "chi_tra+eng",
-  "usage": "使用 + 符號組合多種語言，例如：chi_tra+eng+jpn",
+  "usage": "Combine multiple languages with + symbol, e.g., chi_tra+eng+jpn",
   "examples": [
-    {"code": "chi_tra", "name": "繁體中文"},
-    {"code": "chi_sim", "name": "簡體中文"},
-    {"code": "eng", "name": "英文"},
-    {"code": "jpn", "name": "日文"},
-    {"code": "kor", "name": "韓文"},
-    {"code": "tha", "name": "泰文"},
-    {"code": "vie", "name": "越南文"},
-    {"code": "chi_tra+eng", "name": "繁體中文 + 英文（預設）"},
-    {"code": "chi_sim+eng", "name": "簡體中文 + 英文"},
-    {"code": "chi_tra+jpn+kor+eng", "name": "多語言混合"},
-    {"code": "tha+eng", "name": "泰文 + 英文"},
-    {"code": "vie+eng", "name": "越南文 + 英文"},
-    {"code": "chi_tra+tha+vie+eng", "name": "東南亞多語言混合"}
+    {"code": "chi_tra", "name": "Traditional Chinese"},
+    {"code": "chi_sim", "name": "Simplified Chinese"},
+    {"code": "eng", "name": "English"},
+    {"code": "jpn", "name": "Japanese"},
+    {"code": "kor", "name": "Korean"},
+    {"code": "tha", "name": "Thai"},
+    {"code": "vie", "name": "Vietnamese"},
+    {"code": "chi_tra+eng", "name": "Traditional Chinese + English (Default)"},
+    {"code": "chi_sim+eng", "name": "Simplified Chinese + English"},
+    {"code": "chi_tra+jpn+kor+eng", "name": "Multi-language Mix"}
   ]
 }
 ```
 
 ---
 
-### 4. `GET /config` - 查看當前配置
+### 4. `GET /config` - View Current Configuration
 
-#### 請求範例
+#### Request Example
 
 ```bash
 curl http://localhost:51083/config
 ```
 
-#### 回傳範例
+#### Response Example
 
 ```json
 {
@@ -593,13 +511,13 @@ curl http://localhost:51083/config
     "default_language": "chi_tra+eng",
     "plugins_enabled_by_default": false,
     "supported_languages": {
-      "chi_sim": "簡體中文",
-      "chi_tra": "繁體中文",
-      "eng": "英文",
-      "jpn": "日文",
-      "kor": "韓文",
-      "tha": "泰文",
-      "vie": "越南文"
+      "chi_sim": "Simplified Chinese",
+      "chi_tra": "Traditional Chinese",
+      "eng": "English",
+      "jpn": "Japanese",
+      "kor": "Korean",
+      "tha": "Thai",
+      "vie": "Vietnamese"
     }
   },
   "openai": {
@@ -612,11 +530,87 @@ curl http://localhost:51083/config
 
 ---
 
-## 💻 程式碼範例
+## 🤖 Auto-Convert Feature
+
+### Enable Auto-Monitoring
+
+Place files in `input/` directory, they will be automatically converted to Markdown in `output/`!
+
+```bash
+# 1. Confirm .env configuration
+AUTO_ENABLED=true
+AUTO_POLL_INTERVAL=5
+
+# 2. Start services
+docker compose up -d
+
+# 3. Place files
+cp document.pdf input/
+
+# 4. Wait a few seconds, check output
+ls output/
+# Output: document.md
+```
+
+**For detailed instructions see:** [AUTO_CONVERT.md](AUTO_CONVERT.md)
+
+### Configuration Options
+
+| Config | Default | Description |
+|--------|---------|-------------|
+| `AUTO_ENABLED` | `true` | Enable auto-convert |
+| `AUTO_POLL_INTERVAL` | `5` | Poll interval (seconds) |
+| `AUTO_ENABLE_PLUGINS` | `true` | Enable OCR |
+| `AUTO_OCR_LANG` | `chi_tra+eng` | OCR language |
+| `AUTO_MOVE_SOURCE` | `false` | Move source files after conversion |
+
+### View Logs
+
+```bash
+# View auto-convert service logs
+docker compose logs -f markitdown-auto
+```
+
+---
+
+## 💻 CLI Tool
+
+### Quick Usage
+
+```bash
+# Convert single file
+./markitdown document.pdf output.md
+
+# Convert from URL
+./markitdown --url https://example.com output.md
+
+# Batch convert
+./markitdown *.pdf -o ./output/
+
+# View help
+./markitdown --help
+```
+
+### Common Options
+
+| Option | Description |
+|--------|-------------|
+| `-o, --output DIR` | Output directory |
+| `-u, --url URL` | Convert from URL |
+| `--ocr-lang LANG` | OCR language (default: chi_tra+eng) |
+| `--no-plugins` | Disable plugins |
+| `-v, --verbose` | Verbose output |
+| `--stdout` | Output to stdout |
+
+**For detailed instructions see:** [CLI_USAGE.md](CLI_USAGE.md)
+
+---
+
+## 💻 Code Examples
 
 ### Python
 
-#### 基本轉換
+#### Basic Conversion
 
 ```python
 import requests
@@ -629,12 +623,12 @@ with open('document.pdf', 'rb') as f:
     )
 
 data = response.json()
-print(f"檔名：{data['filename']}")
-print(f"內容長度：{len(data['content'])}")
-print(data['content'][:500])  # 預覽前 500 字
+print(f"Filename: {data['filename']}")
+print(f"Content length: {len(data['content'])}")
+print(data['content'][:500])  # Preview first 500 chars
 ```
 
-#### OCR 轉換（繁體中文）
+#### OCR Conversion (Traditional Chinese)
 
 ```python
 import requests
@@ -653,10 +647,10 @@ with open('scanned-doc.jpg', 'rb') as f:
 with open('output.md', 'w', encoding='utf-8') as f:
     f.write(response.text)
 
-print("繁體中文 OCR 轉換完成！")
+print("Traditional Chinese OCR conversion complete!")
 ```
 
-#### 多語言 OCR（東北亞）
+#### Multi-Language OCR (Northeast Asia)
 
 ```python
 import requests
@@ -673,16 +667,16 @@ with open('mixed-asian-doc.pdf', 'rb') as f:
     )
 
 data = response.json()
-print(f"檔名：{data['filename']}")
-print(f"內容長度：{len(data['content'])} 字元")
+print(f"Filename: {data['filename']}")
+print(f"Content length: {len(data['content'])} chars")
 ```
 
-#### 東南亞語言 OCR（泰文 + 越南文）
+#### Southeast Asian Language OCR (Thai + Vietnamese)
 
 ```python
 import requests
 
-# 泰文文件
+# Thai document
 with open('thai-document.pdf', 'rb') as f:
     response = requests.post(
         'http://localhost:51083/convert',
@@ -697,9 +691,9 @@ with open('thai-document.pdf', 'rb') as f:
 with open('thai-output.md', 'w', encoding='utf-8') as f:
     f.write(response.text)
 
-print("泰文 OCR 轉換完成！")
+print("Thai OCR conversion complete!")
 
-# 越南文文件
+# Vietnamese document
 with open('vietnamese-document.pdf', 'rb') as f:
     response = requests.post(
         'http://localhost:51083/convert',
@@ -714,28 +708,28 @@ with open('vietnamese-document.pdf', 'rb') as f:
 with open('vietnamese-output.md', 'w', encoding='utf-8') as f:
     f.write(response.text)
 
-print("越南文 OCR 轉換完成！")
+print("Vietnamese OCR conversion complete!")
 ```
 
-#### 完整亞洲語言（7 種全開）
+#### Complete Asian Language Support (All 7 Languages)
 
 ```python
 import requests
 
-# 支援的所有亞洲語言
+# All supported Asian languages
 ocr_languages = [
-    "chi_tra",  # 繁體中文
-    "chi_sim",  # 簡體中文
-    "eng",      # 英文
-    "jpn",      # 日文
-    "kor",      # 韓文
-    "tha",      # 泰文
-    "vie",      # 越南文
+    "chi_tra",  # Traditional Chinese
+    "chi_sim",  # Simplified Chinese
+    "eng",      # English
+    "jpn",      # Japanese
+    "kor",      # Korean
+    "tha",      # Thai
+    "vie",      # Vietnamese
 ]
 
-# 全語言混合（適合多語言文件）
+# All languages combined (suitable for multi-language documents)
 all_langs = "+".join(ocr_languages)
-print(f"使用語言組合：{all_langs}")
+print(f"Using language combination: {all_langs}")
 
 with open('multi-lang-asia.pdf', 'rb') as f:
     response = requests.post(
@@ -749,22 +743,22 @@ with open('multi-lang-asia.pdf', 'rb') as f:
     )
 
 data = response.json()
-print(f"轉換成功！內容長度：{len(data['content'])} 字元")
+print(f"Conversion successful! Content length: {len(data['content'])} chars")
 ```
 
-#### 批量轉換
+#### Batch Conversion
 
 ```python
 import requests
 from pathlib import Path
 
-# 批量轉換 input/ 目錄下所有 PDF
+# Batch convert all PDFs in input/ directory
 input_dir = Path('input')
 output_dir = Path('output')
 output_dir.mkdir(exist_ok=True)
 
 for pdf_file in input_dir.glob('*.pdf'):
-    print(f"正在轉換：{pdf_file.name}")
+    print(f"Converting: {pdf_file.name}")
     
     with open(pdf_file, 'rb') as f:
         response = requests.post(
@@ -780,16 +774,16 @@ for pdf_file in input_dir.glob('*.pdf'):
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(response.text)
     
-    print(f"✓ 完成：{output_file.name}")
+    print(f"✓ Complete: {output_file.name}")
 
-print("\n批量轉換完成！")
+print("\nBatch conversion complete!")
 ```
 
 ---
 
 ### cURL
 
-#### 基本轉換
+#### Basic Conversion
 
 ```bash
 curl -X POST "http://localhost:51083/convert" \
@@ -797,45 +791,45 @@ curl -X POST "http://localhost:51083/convert" \
   -o output.md
 ```
 
-#### OCR 轉換（指定語言）
+#### OCR Conversion (Specify Language)
 
 ```bash
-# 繁體中文
+# Traditional Chinese
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@scanned-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+eng" \
   -o output.md
 
-# 簡體中文
+# Simplified Chinese
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@chinese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_sim+eng" \
   -o output.md
 
-# 日文
+# Japanese
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@japanese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=jpn+eng" \
   -o output.md
 
-# 韓文
+# Korean
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@korean-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=kor+eng" \
   -o output.md
 
-# 泰文
+# Thai
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@thai-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=tha+eng" \
   -o output.md
 
-# 越南文
+# Vietnamese
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@vietnamese-doc.pdf" \
   -F "enable_plugins=true" \
@@ -843,24 +837,24 @@ curl -X POST "http://localhost:51083/convert" \
   -o output.md
 ```
 
-#### 多語言混合
+#### Multi-Language Mix
 
 ```bash
-# 東北亞多語言
+# Northeast Asian multi-language
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@northeast-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+jpn+kor+eng" \
   -o output.md
 
-# 東南亞多語言
+# Southeast Asian multi-language
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@southeast-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+tha+vie+eng" \
   -o output.md
 
-# 完整亞洲語言（7 種）
+# Complete Asian languages (all 7)
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@all-asia-doc.pdf" \
   -F "enable_plugins=true" \
@@ -868,15 +862,15 @@ curl -X POST "http://localhost:51083/convert" \
   -o output.md
 ```
 
-#### 批量轉換（Shell 腳本）
+#### Batch Conversion (Shell Script)
 
 ```bash
 #!/bin/bash
 
-# 批量轉換 input/ 目錄下所有 PDF
+# Batch convert all PDFs in input/ directory
 for file in input/*.pdf; do
     filename=$(basename "$file" .pdf)
-    echo "正在轉換：$filename.pdf"
+    echo "Converting: $filename.pdf"
     
     curl -X POST "http://localhost:51083/convert" \
         -F "file=@$file" \
@@ -884,10 +878,10 @@ for file in input/*.pdf; do
         -F "ocr_lang=chi_tra+eng" \
         -o "output/${filename}.md"
     
-    echo "✓ 完成：${filename}.md"
+    echo "✓ Complete: ${filename}.md"
 done
 
-echo "\n批量轉換完成！"
+echo "\nBatch conversion complete!"
 ```
 
 ---
@@ -899,7 +893,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 const axios = require('axios');
 
-// 基本轉換
+// Basic conversion
 const form = new FormData();
 form.append('file', fs.createReadStream('document.pdf'));
 form.append('return_format', 'json');
@@ -910,10 +904,10 @@ const response = await axios.post(
     { headers: form.getHeaders() }
 );
 
-console.log('轉換成功:', response.data.filename);
+console.log('Conversion successful:', response.data.filename);
 fs.writeFileSync('output.md', response.data.content);
 
-// OCR 轉換（繁體中文）
+// OCR conversion (Traditional Chinese)
 const ocrForm = new FormData();
 ocrForm.append('file', fs.createReadStream('scanned-doc.jpg'));
 ocrForm.append('enable_plugins', 'true');
@@ -927,39 +921,39 @@ const ocrResponse = await axios.post(
 );
 
 fs.writeFileSync('output-ocr.md', ocrResponse.data);
-console.log('OCR 轉換完成！');
+console.log('OCR conversion complete!');
 ```
 
 ---
 
-## 🔧 進階配置
+## 🔧 Advanced Configuration
 
-### 使用 OpenAI 視覺模型（高品質 OCR）
+### Using OpenAI Vision Model (High-Quality OCR)
 
-如需更高品質的 OCR（特別是複雜文件或低品質掃描），可使用 OpenAI 視覺模型：
+For higher quality OCR (especially for complex documents or low-quality scans), use OpenAI vision model:
 
-#### 1. 配置環境變數
+#### 1. Configure Environment Variables
 
 ```bash
-# .env 文件
+# .env file
 OPENAI_API_KEY=sk-your-api-key-here
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o
 ```
 
-#### 2. 重啟服務
+#### 2. Restart Services
 
 ```bash
 docker compose restart
 ```
 
-#### 3. 驗證配置
+#### 3. Verify Configuration
 
 ```bash
 curl http://localhost:51083/config
 ```
 
-#### 4. Python 使用範例
+#### 4. Python Usage Example
 
 ```python
 from markitdown import MarkItDown
@@ -982,17 +976,17 @@ print(result.text_content)
 
 ---
 
-### 使用 Azure Document Intelligence
+### Using Azure Document Intelligence
 
-#### 1. 配置環境變數
+#### 1. Configure Environment Variables
 
 ```bash
-# .env 文件
+# .env file
 AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
 AZURE_DOCUMENT_INTELLIGENCE_KEY=your-azure-key-here
 ```
 
-#### 2. 使用 Azure 轉換
+#### 2. Use Azure Conversion
 
 ```bash
 curl -X POST "http://localhost:51083/convert" \
@@ -1003,38 +997,38 @@ curl -X POST "http://localhost:51083/convert" \
 
 ---
 
-### 批量處理目錄
+### Batch Processing Directory
 
-#### 1. 準備目錄結構
+#### 1. Prepare Directory Structure
 
 ```bash
 mkdir -p input output
 ```
 
-#### 2. 放入文件
+#### 2. Place Files
 
 ```bash
 cp *.pdf input/
 ```
 
-#### 3. 批量轉換
+#### 3. Batch Convert
 
 ```bash
-# 使用提供的腳本
+# Using provided script
 docker compose run --rm markitdown-api bash -c "
 for file in /app/input/*.pdf; do
     filename=\$(basename \"\$file\" .pdf)
     markitdown \"\$file\" -o \"/app/output/\${filename}.md\"
-    echo \"轉換完成：\$filename.md\"
+    echo \"Conversion complete: \$filename.md\"
 done
 "
 ```
 
 ---
 
-### 自定義 Docker 配置
+### Custom Docker Configuration
 
-#### 增加記憶體限制
+#### Increase Memory Limit
 
 ```yaml
 # docker-compose.yml
@@ -1045,7 +1039,7 @@ deploy:
       cpus: '4.0'
 ```
 
-#### 更改日誌配置
+#### Change Logging Configuration
 
 ```yaml
 # docker-compose.yml
@@ -1058,126 +1052,138 @@ logging:
 
 ---
 
-## 🔍 故障排除
+## 🔍 Troubleshooting
 
-### 容器無法啟動
+### Container Won't Start
 
 ```bash
-# 查看日誌
+# View logs
 docker compose logs markitdown-api
 
-# 檢查端口是否被佔用
+# Check if port is occupied
 lsof -i :51083
 
-# 強制停止並重啟
+# Force stop and restart
 docker compose down
 docker compose up -d
 ```
 
-### 轉換失敗
+### Conversion Failed
 
 ```bash
-# 1. 檢查文件格式是否支援
+# 1. Check if file format is supported
 curl http://localhost:51083/formats
 
-# 2. 查看容器日誌
+# 2. View container logs
 docker compose logs -f
 
-# 3. 確認文件大小（建議 < 50MB）
+# 3. Confirm file size (recommended < 50MB)
 ls -lh your-file.pdf
 
-# 4. 查看 API 配置
+# 4. View API configuration
 curl http://localhost:51083/config
 ```
 
-### OCR 品質不佳
+### Poor OCR Quality
 
-1. **增加語言組合**：使用更多語言組合（如 `chi_tra+eng+jpn`）
-2. **使用 OpenAI 視覺模型**：配置 `OPENAI_API_KEY`
-3. **提高掃描品質**：確保原始文件清晰
-4. **檢查 Tesseract 語言包**：確認所需語言已安裝
+1. **Increase language combination**: Use more language combinations (e.g., `chi_tra+eng+jpn`)
+2. **Use OpenAI vision model**: Configure `OPENAI_API_KEY`
+3. **Improve scan quality**: Ensure original document is clear
+4. **Check Tesseract language packs**: Confirm required languages are installed
 
 ```bash
-# 進入容器檢查語言包
+# Enter container to check language packs
 docker compose exec markitdown-api bash
 tesseract --list-langs
 ```
 
-### 記憶體不足
+### Insufficient Memory
 
 ```bash
-# 增加 .env 中的記憶體限制
+# Increase memory limit in .env
 MEMORY_LIMIT=4G
 CPU_LIMIT=4.0
 
-# 重啟服務
+# Restart services
 docker compose down
 docker compose up -d
 ```
 
-### 上傳文件過大
+### Upload File Too Large
 
 ```bash
-# 增加 .env 中的上傳限制
+# Increase upload limit in .env
 MAX_UPLOAD_SIZE=104857600  # 100MB
 
-# 重啟服務
+# Restart services
 docker compose restart
 ```
 
 ---
 
-## 🗑️ 停止與清理
+## 🗑️ Stop and Cleanup
 
 ```bash
-# 停止服務
+# Stop services
 docker compose down
 
-# 停止並刪除映像
+# Stop and remove images
 docker compose down --rmi all
 
-# 查看日誌
+# View logs
 docker compose logs -f
 
-# 重新啟動
+# Restart
 docker compose restart
 
-# 重新建置
+# Rebuild
 docker compose build --no-cache
 docker compose up -d
 
-# 測試依賴（確認所有工具已正確安裝）
+# Test dependencies (confirm all tools installed correctly)
 ./scripts/test-deps.sh
 ```
 
 ---
 
-## 📊 API 互動文件
+## 📊 API Interactive Documentation
 
-啟動服務後，訪問：
+After starting services, visit:
 
 - **Swagger UI**: http://localhost:51083/docs
 - **ReDoc**: http://localhost:51083/redoc
 
 ---
 
-## 📄 授權
+## 📄 License
 
-MarkItDown 由 Microsoft 開源，遵循 MIT 授權。
+MarkItDown is open-sourced by Microsoft under the MIT License.
+
+**Original Project:** [microsoft/markitdown](https://github.com/microsoft/markitdown)
 
 ---
 
-## 📞 支援
+## 📞 Support
 
-如有問題，請查看：
+For issues, please check:
 
 - [MarkItDown GitHub](https://github.com/microsoft/markitdown)
-- [Tesseract OCR 文件](https://tesseract-ocr.github.io/)
+- [Tesseract OCR Documentation](https://tesseract-ocr.github.io/)
 
 ---
 
-**建立者：** kimhsiao  
-**最後更新：** 2026-03-13  
-**版本：** 1.1.0  
-**API 端口：** 51083（可透過 `API_PORT` 環境變數調整）  
-**支援語言：** 繁體中文、簡體中文、英文、日文、韓文、泰文、越南文
+## 🔗 Related Documentation
+
+- **[🇹🇼 繁體中文說明](README_ZH_TW.md)** - Traditional Chinese documentation
+- **[AUTO_CONVERT.md](AUTO_CONVERT.md)** - Auto-convert feature guide
+- **[CLI_USAGE.md](CLI_USAGE.md)** - CLI tool usage guide
+- **[CONFIG_GUIDE.md](CONFIG_GUIDE.md)** - Configuration guide
+- **[TEST_REPORT.md](output/TEST_REPORT.md)** - YouTube URL conversion test report
+
+---
+
+**Created by:** kimhsiao  
+**Last Updated:** 2026-03-13  
+**Version:** 1.1.0  
+**API Port:** 51083 (adjustable via `API_PORT` environment variable)  
+**Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese

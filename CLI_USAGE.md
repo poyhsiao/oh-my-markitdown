@@ -1,6 +1,11 @@
 # MarkItDown CLI 使用指南 💻
 
+> **基於：** [microsoft/markitdown](https://github.com/microsoft/markitdown)  
+> **Original Project:** [microsoft/markitdown](https://github.com/microsoft/markitdown)
+
 完整的命令行工具使用說明，支持文件轉換、URL 抓取、批量處理等功能。
+
+**[🇹🇼 繁體中文版](CLI_USAGE_ZH_TW.md)** | **[🇺🇸 English](CLI_USAGE_EN.md)** *(Coming Soon)*
 
 ---
 
