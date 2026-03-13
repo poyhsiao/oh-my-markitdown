@@ -7,8 +7,6 @@
 
 **[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README.md)**
 
-**[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README_EN.md)**
-
 ## 📋 目錄
 
 - [特色功能](#-特色功能)
