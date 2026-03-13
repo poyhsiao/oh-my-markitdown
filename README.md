@@ -3,9 +3,9 @@
 > **Based on:** [microsoft/markitdown](https://github.com/microsoft/markitdown)  
 > **Original Project:** Microsoft MarkItDown - Python tool for converting various files to Markdown
 
-Convert various file formats to Markdown via HTTP API with multi-language OCR support for 7 Asian languages!
+Convert various file formats to Markdown via HTTP API with multi-language OCR support and **YouTube video transcription using Faster-Whisper**!
 
-**[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README.md)**
+**[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README.md)** | **[📋 CHANGELOG](CHANGELOG.md)**
 
 ---
 
@@ -28,6 +28,8 @@ Convert various file formats to Markdown via HTTP API with multi-language OCR su
 ## ✨ Features
 
 - ✅ **7 Asian Language OCR**: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese
+- ✅ **YouTube Video Transcription**: Download audio and transcribe using **Faster-Whisper** (local, no API limits!)
+- ✅ **Audio File Transcription**: Upload MP3/WAV/M4A and convert to text
 - ✅ **Instant Conversion**: Upload files and get Markdown immediately
 - ✅ **Dual Format Output**: Support `markdown` or `json` format
 - ✅ **Environment Variables**: Configurable ports, paths, OCR languages
@@ -355,6 +357,9 @@ docker compose restart
 | `GET` | `/config` | View current configuration |
 | `POST` | `/convert` | Upload file and convert |
 | `POST` | `/convert/url` | Convert from URL |
+| `POST` | `/convert/youtube` | **YouTube video transcription (Faster-Whisper)** ✨ |
+| `POST` | `/convert/audio` | **Audio file transcription (Faster-Whisper)** ✨ |
+| `GET` | `/convert/languages` | **Supported transcription languages** ✨ |
 | `GET` | `/docs` | Swagger UI interactive docs |
 | `GET` | `/redoc` | ReDoc documentation |
 
@@ -434,22 +439,145 @@ curl -X POST "http://localhost:51083/convert/url?url=https://example.com/article
   -o output.md
 ```
 
-**YouTube subtitle extraction:**
+**⚠️ Note:** YouTube URLs are not supported in this endpoint. Use `/convert/youtube` instead.
+
+#### Request Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `url` | String | ✅ | - | Web URL (YouTube URLs will return error) |
+| `return_format` | String | ❌ | `markdown` | Response format: `markdown` or `json` |
+
+---
+
+### 3. `POST /convert/youtube` - YouTube Video Transcription ✨
+
+**Transcribe YouTube videos using Faster-Whisper (local, no API limits!)**
+
+#### Request Example
+
 ```bash
-curl -X POST "http://localhost:51083/convert/url?url=https://www.youtube.com/watch?v=VIDEO_ID" \
+# Basic transcription (Chinese)
+curl -X POST "http://localhost:51083/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh" \
   -o transcript.md
+
+# English transcription
+curl -X POST "http://localhost:51083/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=en" \
+  -o transcript.md
+
+# JSON format
+curl -X POST "http://localhost:51083/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh&return_format=json" \
+  -o response.json
 ```
 
 #### Request Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `url` | String | ✅ | - | Web URL or YouTube URL |
+| `url` | String | ✅ | - | YouTube video URL |
+| `language` | String | ❌ | `zh` | Language code (zh, en, ja, ko, etc.) |
+| `model_size` | String | ❌ | `base` | Model size: tiny, base, small, medium, large |
 | `return_format` | String | ❌ | `markdown` | Response format: `markdown` or `json` |
+| `include_metadata` | Boolean | ❌ | `true` | Include transcription metadata |
+
+#### Model Sizes
+
+| Model | Speed | Accuracy | Memory |
+|-------|-------|----------|--------|
+| `tiny` | Fastest | Fair | ~500MB |
+| `base` | Fast | Good | ~1GB |
+| `small` | Medium | Very Good | ~2GB |
+| `medium` | Slow | Excellent | ~5GB |
+| `large` | Slowest | Best | ~10GB |
+
+**Recommended:** `base` for balance of speed and accuracy.
+
+#### Supported Languages
+
+Use `/convert/languages` to see all supported languages. Common ones:
+- `zh` - Chinese
+- `en` - English
+- `ja` - Japanese
+- `ko` - Korean
+- `fr` - French
+- `de` - German
+- `es` - Spanish
 
 ---
 
-### 3. `GET /ocr-languages` - View OCR Language Support
+### 4. `POST /convert/audio` - Audio File Transcription ✨
+
+**Upload audio files and transcribe using Faster-Whisper**
+
+#### Request Example
+
+```bash
+# Upload and transcribe
+curl -X POST "http://localhost:51083/convert/audio?language=zh" \
+  -F "file=@audio.mp3" \
+  -o transcript.md
+
+# JSON format
+curl -X POST "http://localhost:51083/convert/audio?language=en&return_format=json" \
+  -F "file=@recording.wav" \
+  -o response.json
+```
+
+#### Supported Audio Formats
+
+- MP3, WAV, M4A, FLAC, OGG, etc.
+
+#### Request Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file` | File | ✅ | - | Audio file to transcribe |
+| `language` | String | ❌ | `zh` | Language code |
+| `model_size` | String | ❌ | `base` | Model size |
+| `return_format` | String | ❌ | `markdown` | Response format |
+
+---
+
+### 5. `GET /convert/languages` - Supported Transcription Languages ✨
+
+#### Request Example
+
+```bash
+curl http://localhost:51083/convert/languages
+```
+
+#### Response Example
+
+```json
+{
+  "supported_languages": {
+    "zh": "中文",
+    "zh-TW": "繁體中文",
+    "en": "英文",
+    "ja": "日文",
+    "ko": "韓文",
+    "fr": "法文",
+    "de": "德文",
+    "es": "西班牙文"
+  },
+  "models": {
+    "tiny": {"speed": "最快", "accuracy": "一般", "memory": "~500MB"},
+    "base": {"speed": "快", "accuracy": "好", "memory": "~1GB"},
+    "small": {"speed": "中等", "accuracy": "很好", "memory": "~2GB"},
+    "medium": {"speed": "慢", "accuracy": "極好", "memory": "~5GB"},
+    "large": {"speed": "最慢", "accuracy": "最佳", "memory": "~10GB"}
+  },
+  "recommended": {
+    "fast": "tiny",
+    "balanced": "base",
+    "accurate": "small"
+  }
+}
+```
+
+---
+
+### 6. `GET /ocr-languages` - View OCR Language Support
 
 #### Request Example
 
@@ -489,7 +617,7 @@ curl http://localhost:51083/ocr-languages
 
 ---
 
-### 4. `GET /config` - View Current Configuration
+### 7. `GET /config` - View Current Configuration
 
 #### Request Example
 
@@ -1183,7 +1311,8 @@ For issues, please check:
 ---
 
 **Created by:** kimhsiao  
-**Last Updated:** 2026-03-13  
-**Version:** 1.1.0  
+**Last Updated:** 2026-03-14  
+**Version:** 0.1.0  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  
-**Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese
+**Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
+**New Features:** YouTube transcription, Audio transcription (Faster-Whisper)

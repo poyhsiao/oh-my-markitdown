@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 import io
+import subprocess
 
 # 從環境變數讀取配置
 API_DEBUG = os.getenv("API_DEBUG", "false").lower() == "true"
@@ -17,6 +18,72 @@ MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", "52428800"))  # 預設 50MB
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+
+
+def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
+    """
+    對圖片 PDF 進行 OCR 辨識
+    
+    某些 PDF 是掃描件（圖片 PDF），MarkItDown 無法直接提取文字。
+    此函數會：
+    1. 用 PyMuPDF 將 PDF 轉換為高解析度圖片
+    2. 用 Tesseract OCR 辨識圖片中的文字
+    
+    Args:
+        pdf_path: PDF 文件路徑
+        ocr_lang: OCR 語言（預設 chi_tra+eng）
+    
+    Returns:
+        OCR 辨識出的文字內容
+    """
+    try:
+        import fitz  # PyMuPDF
+        from PIL import Image
+        
+        doc = fitz.open(pdf_path)
+        all_text = []
+        
+        for page_num in range(len(doc)):
+            page = doc[page_num]
+            
+            # 檢查頁面是否有可提取的文字
+            text = page.get_text()
+            if text.strip():
+                # 如果有文字，直接使用
+                all_text.append(f"--- Page {page_num + 1} ---\n{text}")
+                continue
+            
+            # 沒有文字，用 OCR
+            # 高解析度渲染（3x 放大）
+            mat = fitz.Matrix(3, 3)
+            pix = page.get_pixmap(matrix=mat)
+            
+            # 保存為臨時圖片
+            temp_img = f"/tmp/page_{page_num}.png"
+            pix.save(temp_img)
+            
+            # 用 Tesseract OCR
+            result = subprocess.run(
+                ["tesseract", temp_img, "stdout", "-l", ocr_lang],
+                capture_output=True,
+                text=True
+            )
+            
+            ocr_text = result.stdout.strip()
+            if ocr_text:
+                all_text.append(f"--- Page {page_num + 1} (OCR) ---\n{ocr_text}")
+            
+            # 清理臨時圖片
+            try:
+                os.unlink(temp_img)
+            except:
+                pass
+        
+        doc.close()
+        return "\n\n".join(all_text)
+    
+    except Exception as e:
+        raise Exception(f"OCR 處理失敗: {str(e)}")
 
 app = FastAPI(
     title="MarkItDown API",
@@ -175,17 +242,61 @@ async def convert_file(
                 env_vars['TESSERACT_LANG'] = ocr_lang
             
             result = md.convert(tmp_path, enable_plugins=enable_plugins)
+            text_content = result.text_content
+            
+            # 特殊處理：如果是 PDF 且內容為空，可能是圖片 PDF（掃描件）
+            # 需要用 OCR 辨識
+            if file_ext == '.pdf' and (not text_content or len(text_content.strip()) < 10):
+                if API_DEBUG:
+                    print(f"PDF 內容為空或少於 10 字元，嘗試 OCR 辨識...")
+                
+                try:
+                    ocr_result = ocr_image_pdf(tmp_path, ocr_lang or DEFAULT_OCR_LANG)
+                    if ocr_result and len(ocr_result.strip()) > len(text_content.strip()):
+                        text_content = f"[OCR 辨識結果]\n\n{ocr_result}"
+                        if API_DEBUG:
+                            print(f"OCR 辨識成功：{len(text_content)} 字元")
+                except Exception as ocr_error:
+                    if API_DEBUG:
+                        print(f"OCR 辨識失敗：{ocr_error}")
+            
+            # 特殊處理：如果是圖片且啟用 OCR，用 Tesseract 辨識
+            image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'}
+            if file_ext in image_extensions and enable_plugins:
+                if API_DEBUG:
+                    print(f"圖片 OCR 辨識...")
+                
+                try:
+                    ocr_result = subprocess.run(
+                        ["tesseract", tmp_path, "stdout", "-l", ocr_lang or DEFAULT_OCR_LANG],
+                        capture_output=True,
+                        text=True
+                    )
+                    ocr_text = ocr_result.stdout.strip()
+                    if ocr_text and len(ocr_text) > len(text_content.strip()):
+                        text_content = f"[OCR 辨識結果]\n\n{ocr_text}"
+                        if API_DEBUG:
+                            print(f"圖片 OCR 成功：{len(text_content)} 字元")
+                except Exception as ocr_error:
+                    if API_DEBUG:
+                        print(f"圖片 OCR 失敗：{ocr_error}")
             
             if return_format == "markdown":
                 # 直接回傳 Markdown 文字（確保 UTF-8 編碼）
+                # HTTP headers 必須是 ASCII/latin-1，不能包含中文
+                # 使用 URL encoding 處理文件名
+                from urllib.parse import quote
+                safe_filename = quote(file.filename or "unknown", safe='')
+                
                 return Response(
-                    content=result.text_content.encode('utf-8'),
+                    content=text_content.encode('utf-8'),
                     media_type="text/markdown; charset=utf-8",
                     headers={
-                        "X-Original-Filename": file.filename or "unknown",
+                        "X-Original-Filename": safe_filename,
                         "X-Conversion-Time": datetime.now().isoformat(),
                         "X-OCR-Language": ocr_lang if enable_plugins else "N/A",
-                        "Content-Disposition": f'attachment; filename="{Path(file.filename or "").stem}.md"'
+                        # 文件名使用 ASCII 安全字符，避免編碼問題
+                        "Content-Disposition": f'attachment; filename="converted.md"'
                     }
                 )
             else:
@@ -196,10 +307,10 @@ async def convert_file(
                     "file_size": len(file_content),
                     "conversion_time": datetime.now().isoformat(),
                     "ocr_language": ocr_lang if enable_plugins else "N/A",
-                    "content": result.text_content,
+                    "content": text_content,
                     "metadata": {
-                        "type": result.type,
-                        "source": result.source,
+                        "type": getattr(result, 'type', 'unknown'),
+                        "source": getattr(result, 'source', None),
                         "title": getattr(result, 'title', None),
                         "author": getattr(result, 'author', None),
                     }
@@ -228,17 +339,26 @@ async def convert_url(
     """
     從 URL 抓取內容並轉換為 Markdown
     
-    - **url**: 網頁 URL 或 YouTube URL
+    - **url**: 網頁 URL（注意：YouTube URL 請使用 /convert/youtube 端點）
     - **return_format**: 回傳格式（markdown 或 json）
     """
     
     try:
+        # YouTube URL 請使用 /convert/youtube 端點
+        is_youtube = 'youtube.com' in url or 'youtu.be' in url
+        if is_youtube:
+            raise HTTPException(
+                status_code=400,
+                detail="YouTube URL 請使用 /convert/youtube 端點。例如：POST /convert/youtube?url=YouTube_URL"
+            )
+        
+        # 一般 URL 處理
         result = md.convert(url)
         
         if return_format == "markdown":
             return Response(
-                content=result.text_content,
-                media_type="text/markdown",
+                content=result.text_content.encode('utf-8'),
+                media_type="text/markdown; charset=utf-8",
                 headers={
                     "X-Source-URL": url,
                     "X-Conversion-Time": datetime.now().isoformat()
@@ -262,6 +382,164 @@ async def convert_url(
             status_code=500,
             detail=f"轉換失敗：{str(e)}"
         )
+
+# ==================== Whisper 轉錄端點 ====================
+
+from .whisper_transcribe import (
+    transcribe_audio,
+    transcribe_youtube_video,
+    format_transcript_as_markdown,
+    SUPPORTED_LANGUAGES
+)
+
+@app.post("/convert/youtube")
+async def transcribe_youtube(
+    url: str = Query(..., description="YouTube 影片 URL"),
+    language: str = Query("zh", description="語言代碼（zh, en, ja, ko 等）"),
+    model_size: str = Query("base", description="模型大小（tiny, base, small, medium, large）"),
+    return_format: str = Query("markdown", description="回傳格式：markdown 或 json"),
+    include_metadata: bool = Query(True, description="是否包含元數據")
+):
+    """
+    下載 YouTube 影片音訊並使用 Whisper 轉錄
+    
+    - **url**: YouTube 影片 URL
+    - **language**: 語言代碼（zh=中文, en=英文, ja=日文, ko=韓文）
+    - **model_size**: 模型大小（tiny 最快, large 最準確）
+    - **return_format**: 回傳格式
+    - **include_metadata**: 是否包含轉錄元數據
+    """
+    
+    try:
+        # 轉錄 YouTube 影片
+        result = transcribe_youtube_video(
+            url=url,
+            language=language,
+            model_size=model_size
+        )
+        
+        # 格式化為 Markdown
+        markdown_content = format_transcript_as_markdown(
+            title=result["title"],
+            transcript=result["transcript"],
+            metadata=result["metadata"],
+            include_metadata=include_metadata
+        )
+        
+        if return_format == "markdown":
+            return Response(
+                content=markdown_content.encode('utf-8'),
+                media_type="text/markdown; charset=utf-8",
+                headers={
+                    "X-Source-URL": url,
+                    "X-Conversion-Time": datetime.now().isoformat(),
+                    "X-Transcript-Length": str(len(result["transcript"]))
+                }
+            )
+        else:
+            return {
+                "success": True,
+                "url": url,
+                "title": result["title"],
+                "transcript": result["transcript"],
+                "metadata": result["metadata"],
+                "markdown": markdown_content
+            }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"轉錄失敗：{str(e)}"
+        )
+
+
+@app.post("/convert/audio")
+async def transcribe_audio_file(
+    file: UploadFile = File(..., description="音訊檔案"),
+    language: str = Query("zh", description="語言代碼"),
+    model_size: str = Query("base", description="模型大小"),
+    return_format: str = Query("markdown", description="回傳格式")
+):
+    """
+    上傳音訊檔案並使用 Whisper 轉錄
+    
+    - **file**: 音訊檔案（MP3, WAV, M4A, FLAC 等）
+    - **language**: 語言代碼
+    - **model_size**: 模型大小
+    - **return_format**: 回傳格式
+    """
+    
+    try:
+        # 保存上傳的檔案
+        suffix = Path(file.filename or "").suffix
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+        
+        try:
+            # 轉錄
+            transcript, metadata = transcribe_audio(
+                tmp_path,
+                language=language,
+                model_size=model_size
+            )
+            
+            # 格式化
+            markdown_content = format_transcript_as_markdown(
+                title=file.filename or "音訊轉錄",
+                transcript=transcript,
+                metadata=metadata
+            )
+            
+            if return_format == "markdown":
+                return Response(
+                    content=markdown_content.encode('utf-8'),
+                    media_type="text/markdown; charset=utf-8",
+                    headers={
+                        "X-Filename": file.filename or "unknown",
+                        "X-Conversion-Time": datetime.now().isoformat()
+                    }
+                )
+            else:
+                return {
+                    "success": True,
+                    "filename": file.filename,
+                    "transcript": transcript,
+                    "metadata": metadata,
+                    "markdown": markdown_content
+                }
+        
+        finally:
+            # 清理臨時檔案
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"轉錄失敗：{str(e)}"
+        )
+
+
+@app.get("/convert/languages")
+async def list_transcribe_languages():
+    """列出 Whisper 支援的語言"""
+    return {
+        "supported_languages": SUPPORTED_LANGUAGES,
+        "models": {
+            "tiny": {"speed": "最快", "accuracy": "一般", "memory": "~500MB"},
+            "base": {"speed": "快", "accuracy": "好", "memory": "~1GB"},
+            "small": {"speed": "中等", "accuracy": "很好", "memory": "~2GB"},
+            "medium": {"speed": "慢", "accuracy": "極好", "memory": "~5GB"},
+            "large": {"speed": "最慢", "accuracy": "最佳", "memory": "~10GB"}
+        },
+        "recommended": {
+            "fast": "tiny",
+            "balanced": "base",
+            "accurate": "small"
+        }
+    }
 
 @app.get("/formats")
 async def list_formats():

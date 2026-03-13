@@ -38,18 +38,23 @@ services:
       - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=${AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:-}
       - AZURE_DOCUMENT_INTELLIGENCE_KEY=${AZURE_DOCUMENT_INTELLIGENCE_KEY:-}
       
+      # Whisper 配置
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      
       # Python 配置
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
     
-    # 資源限制
+    # 資源限制（增加記憶體以支援 Whisper）
     deploy:
       resources:
         limits:
-          memory: ${MEMORY_LIMIT:-2G}
+          memory: ${MEMORY_LIMIT:-4G}
           cpus: '${CPU_LIMIT:-2.0}'
         reservations:
-          memory: ${MEMORY_RESERVE:-512M}
+          memory: ${MEMORY_RESERVE:-1G}
           cpus: '${CPU_RESERVE:-0.5}'
     
     # 重啟策略

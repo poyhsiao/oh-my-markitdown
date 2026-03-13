@@ -44,6 +44,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python 依賴構建工具
     build-essential \
     \
+    # YouTube 下載工具
+    yt-dlp \
+    \
     # 清理
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -68,13 +71,18 @@ RUN pip install --no-cache-dir \
     \
     # Azure Document Intelligence（可選）
     azure-ai-documentintelligence \
-    azure-identity
+    azure-identity \
+    \
+    # Faster-Whisper（本地 STT，比 Whisper 快 2-4 倍）
+    faster-whisper
 
 # 創建目錄結構
 RUN mkdir -p /app/input /app/output /app/data /app/api
 
 # 複製 API 服務代碼
+COPY api/__init__.py /app/api/__init__.py
 COPY api/main.py /app/api/main.py
+COPY api/whisper_transcribe.py /app/api/whisper_transcribe.py
 
 # 複製自動轉換腳本
 COPY api/auto_convert.py /app/api/auto_convert.py

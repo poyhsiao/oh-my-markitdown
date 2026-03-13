@@ -3,9 +3,9 @@
 > **基於：** [microsoft/markitdown](https://github.com/microsoft/markitdown)  
 > **原始專案：** Microsoft MarkItDown - 將各種文件轉換為 Markdown 的 Python 工具
 
-透過 HTTP API 將各種文件格式轉換為 Markdown，支援 **7 種亞洲語言 OCR**！
+透過 HTTP API 將各種文件格式轉換為 Markdown，支援 **7 種亞洲語言 OCR** 和 **YouTube 影片轉錄（Faster-Whisper）**！
 
-**[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README.md)**
+**[🇹🇼 繁體中文版](README_ZH_TW.md)** | **[🇺🇸 English](README.md)** | **[📋 CHANGELOG](CHANGELOG.md)**
 
 ## 📋 目錄
 
@@ -25,6 +25,8 @@
 ## ✨ 特色功能
 
 - ✅ **7 種亞洲語言 OCR**：繁中、簡中、英文、日文、韓文、泰文、越南文
+- ✅ **YouTube 影片轉錄**：使用 **Faster-Whisper** 本地轉錄，無 API 限制！✨
+- ✅ **音頻檔案轉錄**：上傳 MP3/WAV/M4A 轉換為文字 ✨
 - ✅ **即時轉換**：上傳文件後立即回傳 Markdown
 - ✅ **雙格式輸出**：支援 `markdown` 或 `json` 格式
 - ✅ **環境變數配置**：端口、路徑、OCR 預設語言皆可自訂
@@ -1182,7 +1184,8 @@ MarkItDown 由 Microsoft 開源，遵循 MIT 授權。
 ---
 
 **建立者：** kimhsiao  
-**最後更新：** 2026-03-13  
-**版本：** 1.1.0  
+**最後更新：** 2026-03-14  
+**版本：** 0.1.0  
 **API 端口：** 51083（可透過 `API_PORT` 環境變數調整）  
-**支援語言：** 繁體中文、簡體中文、英文、日文、韓文、泰文、越南文
+**支援語言：** 繁體中文、簡體中文、英文、日文、韓文、泰文、越南文  
+**新功能：** YouTube 轉錄、音頻轉錄（Faster-Whisper）
