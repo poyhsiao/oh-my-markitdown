@@ -22,3 +22,11 @@ __pycache__/
 # API
 api/__pycache__/
 *.pyc
+
+# Editor swaps
+*.swp
+*.swo
+*~
+
+# Docker
+.docker-compose.yml.swp
