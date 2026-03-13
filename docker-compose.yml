@@ -69,3 +69,57 @@ services:
       options:
         max-size: "${LOG_MAX_SIZE:-10m}"
         max-file: "${LOG_MAX_FILE:-3}"
+
+  # 自動轉換服務（可選）
+  markitdown-auto:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: markitdown-auto
+    # 不需要暴露端口（後台服務）
+    volumes:
+      # 輸入目錄（與 API 服務共享）
+      - ${INPUT_DIR:-./input}:/app/input
+      # 輸出目錄（與 API 服務共享）
+      - ${OUTPUT_DIR:-./output}:/app/output
+    # 環境變數
+    environment:
+      # 自動轉換配置
+      - AUTO_INPUT_DIR=/app/input
+      - AUTO_OUTPUT_DIR=/app/output
+      - AUTO_ENABLE_PLUGINS=${AUTO_ENABLE_PLUGINS:-true}
+      - AUTO_OCR_LANG=${AUTO_OCR_LANG:-chi_tra+eng}
+      - AUTO_MOVE_SOURCE=${AUTO_MOVE_SOURCE:-false}
+      - AUTO_POLL_INTERVAL=${AUTO_POLL_INTERVAL:-5}
+      - AUTO_MAX_RETRIES=${AUTO_MAX_RETRIES:-3}
+      
+      # Python 配置
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    
+    # 命令：運行自動轉換腳本
+    command: ["python", "api/auto_convert.py"]
+    
+    # 資源限制
+    deploy:
+      resources:
+        limits:
+          memory: ${AUTO_MEMORY_LIMIT:-1G}
+          cpus: '${AUTO_CPU_LIMIT:-1.0}'
+        reservations:
+          memory: ${AUTO_MEMORY_RESERVE:-256M}
+          cpus: '${AUTO_CPU_RESERVE:-0.25}'
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 日誌配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${AUTO_LOG_MAX_SIZE:-5m}"
+        max-file: "${AUTO_LOG_MAX_FILE:-2}"
+    
+    # 依賴 API 服務（可選，確保同時啟動）
+    depends_on:
+      - markitdown-api

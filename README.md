@@ -10,6 +10,7 @@
 - [快速開始](#-快速開始)
 - [環境變數配置](#-環境變數配置)
 - [API 使用說明](#-api-使用說明)
+- [自動轉換功能](#-自動轉換功能) ✨
 - [程式碼範例](#-程式碼範例)
 - [進階配置](#-進階配置)
 - [故障排除](#-故障排除)
@@ -23,6 +24,7 @@
 - ✅ **雙格式輸出**：支援 `markdown` 或 `json` 格式
 - ✅ **環境變數配置**：端口、路徑、OCR 預設語言皆可自訂
 - ✅ **批量處理**：支援目錄批量轉換
+- ✅ **自動監控轉換**：放入 `input/` 目錄自動轉換到 `output/` ✨
 - ✅ **Swagger UI**：完整的互動式 API 文件
 - ✅ **健康檢查**：內建健康檢查端點
 - ✅ **資源限制**：可調整記憶體、CPU 限制
@@ -157,6 +159,49 @@ tesseract --list-langs    # 查看 OCR 語言包
 exiftool -ver             # 查看 exiftool 版本
 ffmpeg -version           # 查看 ffmpeg 版本
 pip list                  # 查看 Python 包
+```
+
+---
+
+## 🤖 自動轉換功能
+
+### 啟用自動監控
+
+把文件放入 `input/` 目錄，會自動轉換為 Markdown 並輸出到 `output/`！
+
+```bash
+# 1. 確認 .env 配置
+AUTO_ENABLED=true
+AUTO_POLL_INTERVAL=5
+
+# 2. 啟動服務
+docker compose up -d
+
+# 3. 放入文件
+cp document.pdf input/
+
+# 4. 等待幾秒，查看輸出
+ls output/
+# 輸出：document.md
+```
+
+**詳細說明請參考：** [AUTO_CONVERT.md](AUTO_CONVERT.md)
+
+### 配置選項
+
+| 配置 | 預設值 | 說明 |
+|------|--------|------|
+| `AUTO_ENABLED` | `true` | 是否啟用自動轉換 |
+| `AUTO_POLL_INTERVAL` | `5` | 監控間隔（秒） |
+| `AUTO_ENABLE_PLUGINS` | `true` | 是否啟用 OCR |
+| `AUTO_OCR_LANG` | `chi_tra+eng` | OCR 語言 |
+| `AUTO_MOVE_SOURCE` | `false` | 轉換後移動源文件 |
+
+### 查看日誌
+
+```bash
+# 查看自動轉換服務日誌
+docker compose logs -f markitdown-auto
 ```
 
 ---
