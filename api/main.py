@@ -124,11 +124,17 @@ async def convert_file(
     
     try:
         # 使用臨時文件進行轉換（MarkItDown 需要文件路徑）
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp_file:
-            tmp_file.write(file_content)
-            tmp_path = tmp_file.name
+        # 重要：使用 delete=False 並手動管理，確保編碼正確
+        import uuid
+        temp_filename = f"temp_{uuid.uuid4().hex}{file_ext}"
+        temp_dir = tempfile.gettempdir()
+        tmp_path = os.path.join(temp_dir, temp_filename)
         
         try:
+            # 以二進制模式寫入文件（避免編碼問題）
+            with open(tmp_path, 'wb') as tmp_file:
+                tmp_file.write(file_content)
+            
             # 執行轉換（如需 OCR，設置環境變數）
             env_vars = {}
             if enable_plugins and ocr_lang:
@@ -168,7 +174,11 @@ async def convert_file(
         finally:
             # 清理臨時文件
             if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+                try:
+                    os.unlink(tmp_path)
+                except Exception as cleanup_error:
+                    if verbose:
+                        print(f"清理臨時文件失敗：{cleanup_error}")
     
     except Exception as e:
         raise HTTPException(
