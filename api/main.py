@@ -13,6 +13,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# 支援的 OCR 語言代碼
+OCR_LANGUAGES = {
+    "chi_sim": "簡體中文",
+    "chi_tra": "繁體中文",
+    "eng": "英文",
+    "jpn": "日文",
+    "kor": "韓文",
+}
+
+# 預設語言組合（可同時識別多種語言）
+DEFAULT_OCR_LANG = "chi_tra+eng"  # 繁體中文 + 英文
+
 # 初始化 MarkItDown
 md = MarkItDown(enable_plugins=False)
 
@@ -39,6 +51,7 @@ async def health_check():
 async def convert_file(
     file: UploadFile = File(..., description="要轉換的文件檔案"),
     enable_plugins: bool = Query(False, description="是否啟用插件（如 OCR）"),
+    ocr_lang: str = Query(DEFAULT_OCR_LANG, description="OCR 語言代碼，支援：chi_sim, chi_tra, eng, jpn, kor，可用 + 組合（例：chi_tra+eng）"),
     return_format: str = Query("markdown", description="回傳格式：markdown 或 json", regex="^(markdown|json)$")
 ):
     """
@@ -46,6 +59,7 @@ async def convert_file(
     
     - **file**: 要轉換的文件（支援 PDF, DOCX, PPTX, XLSX, 圖片，音頻等）
     - **enable_plugins**: 是否啟用插件（預設 false）
+    - **ocr_lang**: OCR 語言（預設 chi_tra+eng，支援 chi_sim, chi_tra, eng, jpn, kor，可用 + 組合）
     - **return_format**: 回傳格式（markdown 或 json）
     
     回傳：
@@ -69,6 +83,17 @@ async def convert_file(
             detail=f"不支援的文件類型：{file_ext}。支援的類型：{', '.join(allowed_extensions)}"
         )
     
+    # 驗證 OCR 語言
+    if ocr_lang:
+        valid_langs = set(OCR_LANGUAGES.keys())
+        requested_langs = ocr_lang.split('+')
+        for lang in requested_langs:
+            if lang not in valid_langs:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"不支援的 OCR 語言：{lang}。支援的語言：{', '.join(valid_langs)}"
+                )
+    
     try:
         # 讀取上傳的文件
         file_content = await file.read()
@@ -79,7 +104,11 @@ async def convert_file(
             tmp_path = tmp_file.name
         
         try:
-            # 執行轉換
+            # 執行轉換（如需 OCR，設置環境變數）
+            env_vars = {}
+            if enable_plugins and ocr_lang:
+                env_vars['TESSERACT_LANG'] = ocr_lang
+            
             result = md.convert(tmp_path, enable_plugins=enable_plugins)
             
             if return_format == "markdown":
@@ -173,6 +202,25 @@ async def list_formats():
         "audio": ["MP3", "WAV", "M4A", "FLAC", "OGG"],
         "data": ["CSV", "JSON", "XML"],
         "other": ["ZIP", "EPUB", "MSG", "OUTLOOK"]
+    }
+
+@app.get("/ocr-languages")
+async def list_ocr_languages():
+    """列出所有支援的 OCR 語言"""
+    return {
+        "supported_languages": OCR_LANGUAGES,
+        "default": DEFAULT_OCR_LANG,
+        "usage": "使用 + 符號組合多種語言，例如：chi_tra+eng+jpn",
+        "examples": [
+            {"code": "chi_tra", "name": "繁體中文"},
+            {"code": "chi_sim", "name": "簡體中文"},
+            {"code": "eng", "name": "英文"},
+            {"code": "jpn", "name": "日文"},
+            {"code": "kor", "name": "韓文"},
+            {"code": "chi_tra+eng", "name": "繁體中文 + 英文（預設）"},
+            {"code": "chi_sim+eng", "name": "簡體中文 + 英文"},
+            {"code": "chi_tra+jpn+kor+eng", "name": "多語言混合"},
+        ]
     }
 
 if __name__ == "__main__":

@@ -15,7 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     # 字體支持
     fonts-dejavu-core \
+    # Tesseract OCR + 多語言數據包
     tesseract-ocr \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-chi-tra \
+    tesseract-ocr-eng \
+    tesseract-ocr-jpn \
+    tesseract-ocr-kor \
     # 清理
     && rm -rf /var/lib/apt/lists/*
 

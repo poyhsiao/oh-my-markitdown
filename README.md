@@ -8,10 +8,25 @@
 |------|------|
 | **文件** | PDF、Word (DOCX/DOC)、PowerPoint (PPTX/PPT)、Excel (XLSX/XLS) |
 | **網頁** | HTML、URL（含 YouTube） |
-| **圖片** | JPG、PNG、GIF、WEBP、BMP、TIFF（含 EXIF + OCR） |
+| **圖片** | JPG、PNG、GIF、WEBP、BMP、TIFF（含 EXIF + 多語言 OCR） |
 | **音頻** | MP3、WAV、M4A、FLAC、OGG（含語音轉錄） |
 | **資料** | CSV、JSON、XML |
 | **其他** | ZIP、EPub、Outlook 郵件 |
+
+## 🔤 OCR 多語言支援
+
+| 語言代碼 | 語言 | 說明 |
+|----------|------|------|
+| `chi_tra` | 繁體中文 | 台灣、香港、澳門繁體字 |
+| `chi_sim` | 簡體中文 | 中國大陸簡體字 |
+| `eng` | 英文 | English |
+| `jpn` | 日文 | 日本語（含漢字、平假名、片假名） |
+| `kor` | 韓文 | 한국어（諺文） |
+
+**組合使用：** 使用 `+` 符號組合多種語言，例如：
+- `chi_tra+eng`（繁體中文 + 英文，預設）
+- `chi_sim+eng`（簡體中文 + 英文）
+- `chi_tra+jpn+kor+eng`（多語言混合）
 
 ## 🚀 快速開始
 
@@ -54,7 +69,8 @@ curl http://localhost:51083/formats
 ```bash
 curl -X POST "http://localhost:51083/convert" \
   -F "file=@your-file.pdf" \
-  -F "enable_plugins=false" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+eng" \
   -F "return_format=markdown" \
   -o output.md
 ```
@@ -62,6 +78,7 @@ curl -X POST "http://localhost:51083/convert" \
 **參數：**
 - `file` (必填): 要轉換的文件檔案
 - `enable_plugins` (選填): 是否啟用插件（預設 `false`）
+- `ocr_lang` (選填): OCR 語言代碼（預設 `chi_tra+eng`，支援 `chi_tra`, `chi_sim`, `eng`, `jpn`, `kor`，可用 `+` 組合）
 - `return_format` (選填): `markdown` 或 `json`（預設 `markdown`）
 
 **回傳格式：**
@@ -118,6 +135,37 @@ curl http://localhost:51083/formats
 curl http://localhost:51083/health
 ```
 
+#### 5. `GET /ocr-languages` - 查看 OCR 語言支援
+
+```bash
+curl http://localhost:51083/ocr-languages
+```
+
+**回傳範例：**
+```json
+{
+  "supported_languages": {
+    "chi_sim": "簡體中文",
+    "chi_tra": "繁體中文",
+    "eng": "英文",
+    "jpn": "日文",
+    "kor": "韓文"
+  },
+  "default": "chi_tra+eng",
+  "usage": "使用 + 符號組合多種語言，例如：chi_tra+eng+jpn",
+  "examples": [
+    {"code": "chi_tra", "name": "繁體中文"},
+    {"code": "chi_sim", "name": "簡體中文"},
+    {"code": "eng", "name": "英文"},
+    {"code": "jpn", "name": "日文"},
+    {"code": "kor", "name": "韓文"},
+    {"code": "chi_tra+eng", "name": "繁體中文 + 英文（預設）"},
+    {"code": "chi_sim+eng", "name": "簡體中文 + 英文"},
+    {"code": "chi_tra+jpn+kor+eng", "name": "多語言混合"}
+  ]
+}
+```
+
 ---
 
 ## 💻 程式碼範例
@@ -160,6 +208,50 @@ print(f"內容長度：{len(data['content'])}")
 print(data['content'][:500])  # 預覽前 500 字
 ```
 
+### Python（OCR 轉換 - 繁體中文）
+
+```python
+import requests
+
+with open('scanned-doc.jpg', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        data={
+            'enable_plugins': 'true',
+            'ocr_lang': 'chi_tra+eng',
+            'return_format': 'markdown'
+        }
+    )
+
+with open('output.md', 'w', encoding='utf-8') as f:
+    f.write(response.text)
+
+print("OCR 轉換完成！")
+```
+
+### Python（多語言 OCR）
+
+```python
+import requests
+
+# 混合語言文件（繁中 + 英文 + 日文 + 韓文）
+with open('mixed-asian-doc.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        data={
+            'enable_plugins': 'true',
+            'ocr_lang': 'chi_tra+eng+jpn+kor',
+            'return_format': 'json'
+        }
+    )
+
+data = response.json()
+print(f"檔名：{data['filename']}")
+print(f"內容長度：{len(data['content'])} 字元")
+```
+
 ### cURL（批量轉換）
 
 ```bash
@@ -200,7 +292,52 @@ fs.writeFileSync('output.md', response.data.content);
 
 ### 啟用 OCR 插件
 
-如需使用 OCR 功能（從圖片提取文字），需要設置 OpenAI API Key：
+如需使用 OCR 功能（從圖片提取文字），可指定語言：
+
+**繁體中文文件：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@scanned-document.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+eng" \
+  -o output.md
+```
+
+**簡體中文文件：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@chinese-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_sim+eng" \
+  -o output.md
+```
+
+**多語言混合（繁中 + 英文 + 日文）：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@mixed-lang.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+eng+jpn" \
+  -o output.md
+```
+
+**韓文文件：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@korean-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=kor+eng" \
+  -o output.md
+```
+
+**查看支援的 OCR 語言：**
+```bash
+curl http://localhost:51083/ocr-languages
+```
+
+### 使用 OpenAI 視覺模型（進階）
+
+如需更高品質的 OCR，可使用 OpenAI 視覺模型：
 
 **docker-compose.yml：**
 ```yaml
@@ -208,12 +345,19 @@ environment:
   - OPENAI_API_KEY=sk-your-key-here
 ```
 
-**API 請求：**
-```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@scanned-document.pdf" \
-  -F "enable_plugins=true" \
-  -o output.md
+**Python 範例：**
+```python
+from markitdown import MarkItDown
+from openai import OpenAI
+
+client = OpenAI()
+md = MarkItDown(
+    enable_plugins=True,
+    llm_client=client,
+    llm_model="gpt-4o"
+)
+result = md.convert("scanned-document.pdf")
+print(result.text_content)
 ```
 
 ### 調整資源限制
