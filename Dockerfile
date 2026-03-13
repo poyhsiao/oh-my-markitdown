@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # 基礎工具
     curl \
     ca-certificates \
-    wget \
     \
     # PDF 處理（pdfminer.six, pdfplumber）
     poppler-utils \
@@ -45,9 +44,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python 依賴構建工具
     build-essential \
     \
-    # yt-dlp 依賴（YouTube 下載和字幕抓取）
-    python3-pip \
-    \
     # 清理
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -72,10 +68,7 @@ RUN pip install --no-cache-dir \
     \
     # Azure Document Intelligence（可選）
     azure-ai-documentintelligence \
-    azure-identity \
-    \
-    # YouTube 字幕抓取工具
-    yt-dlp
+    azure-identity
 
 # 創建目錄結構
 RUN mkdir -p /app/input /app/output /app/data /app/api
@@ -86,14 +79,11 @@ COPY api/main.py /app/api/main.py
 # 複製自動轉換腳本
 COPY api/auto_convert.py /app/api/auto_convert.py
 
-# 複製 YouTube 字幕抓取工具
-COPY api/youtube_grabber.py /app/api/youtube_grabber.py
-
 # 複製 CLI 工具
 COPY cli.py /app/cli.py
 
 # 設置執行權限
-RUN chmod +x /app/cli.py /app/api/youtube_grabber.py
+RUN chmod +x /app/cli.py
 
 # 暴露 API 端口
 EXPOSE 8000
