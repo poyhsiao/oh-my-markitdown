@@ -1,136 +1,308 @@
-# MarkItDown Docker 🐳
+# MarkItDown API Docker 🐳🚀
 
-使用 Docker 容器輕鬆將各種文件格式轉換為 Markdown！
+透過 HTTP API 將各種文件格式轉換為 Markdown！
 
 ## 📦 支援的文件格式
 
-- **文件**：PDF、Word (DOCX)、PowerPoint (PPTX)、Excel (XLSX/XLS)
-- **網頁**：HTML、YouTube URL（字幕）
-- **多媒體**：圖片（EXIF + OCR）、音頻（語音轉錄）
-- **資料格式**：CSV、JSON、XML
-- **其他**：ZIP、EPub、Outlook 郵件
+| 類型 | 格式 |
+|------|------|
+| **文件** | PDF、Word (DOCX/DOC)、PowerPoint (PPTX/PPT)、Excel (XLSX/XLS) |
+| **網頁** | HTML、URL（含 YouTube） |
+| **圖片** | JPG、PNG、GIF、WEBP、BMP、TIFF（含 EXIF + OCR） |
+| **音頻** | MP3、WAV、M4A、FLAC、OGG（含語音轉錄） |
+| **資料** | CSV、JSON、XML |
+| **其他** | ZIP、EPub、Outlook 郵件 |
 
 ## 🚀 快速開始
 
-### 1. 建立目錄結構
+### 1. 建置並啟動服務
 
 ```bash
-mkdir -p input output
-```
+cd /Users/kimhsiao/git/kimhsiao/markitdown-kim
 
-### 2. 建置 Docker 映像
-
-```bash
+# 建置 Docker 映像
 docker compose build
-```
 
-### 3. 使用方式
-
-#### 方法 A：一次性轉換（推薦）
-
-```bash
-# 將文件放入 input/ 目錄
-cp your-file.pdf input/
-
-# 執行轉換
-docker compose run --rm markitdown markitdown /app/input/your-file.pdf -o /app/output/your-file.md
-
-# 查看結果
-cat output/your-file.md
-```
-
-#### 方法 B：管道輸入
-
-```bash
-cat input/file.pdf | docker compose run --rm markitdown markitdown > output/file.md
-```
-
-#### 方法 C：進入交互式容器
-
-```bash
+# 啟動服務
 docker compose up -d
-docker compose exec markitdown bash
 
-# 在容器內執行
-markitdown /app/input/file.pdf -o /app/output/file.md
+# 查看日誌
+docker compose logs -f
 ```
 
-## 📝 常用命令
+服務將在 **http://localhost:51083** 啟動！
 
-### 轉換單一文件
+### 2. 測試服務
+
 ```bash
-docker compose run --rm markitdown markitdown /app/input/document.pdf -o /app/output/document.md
+# 健康檢查
+curl http://localhost:51083/health
+
+# 查看支援格式
+curl http://localhost:51083/formats
 ```
 
-### 批量轉換（所有 PDF）
+---
+
+## 📡 API 使用說明
+
+### API 端點
+
+#### 1. `POST /convert` - 上傳文件並轉換
+
+**請求：**
 ```bash
-docker compose run --rm markitdown bash -c "for f in /app/input/*.pdf; do markitdown \"\$f\" -o \"/app/output/\${f%.pdf}.md\"; done"
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@your-file.pdf" \
+  -F "enable_plugins=false" \
+  -F "return_format=markdown" \
+  -o output.md
 ```
 
-### 使用 LLM 描述圖片（需要 OpenAI API）
+**參數：**
+- `file` (必填): 要轉換的文件檔案
+- `enable_plugins` (選填): 是否啟用插件（預設 `false`）
+- `return_format` (選填): `markdown` 或 `json`（預設 `markdown`）
+
+**回傳格式：**
+
+**Markdown（預設）：**
+- Content-Type: `text/markdown`
+- 直接回傳 Markdown 內容
+- Headers 包含原始檔名和轉換時間
+
+**JSON：**
+```json
+{
+  "success": true,
+  "filename": "document.pdf",
+  "file_size": 123456,
+  "conversion_time": "2026-03-13T14:30:00",
+  "content": "# Markdown 內容...",
+  "metadata": {
+    "type": "pdf",
+    "source": "file",
+    "title": "文件標題",
+    "author": "作者"
+  }
+}
+```
+
+---
+
+#### 2. `POST /convert/url` - 從 URL 轉換
+
+**請求：**
 ```bash
-docker compose run --rm -e OPENAI_API_KEY=your_key markitdown python -c "
-from markitdown import MarkItDown
-from openai import OpenAI
-md = MarkItDown(llm_client=OpenAI(), llm_model='gpt-4o')
-result = md.convert('/app/input/image.jpg')
-print(result.text_content)
-" > output/image.md
+curl -X POST "http://localhost:51083/convert/url?url=https://example.com/article" \
+  -o output.md
 ```
 
-### 啟用插件（如 OCR）
+**參數：**
+- `url` (必填): 網頁 URL 或 YouTube URL
+- `return_format` (選填): `markdown` 或 `json`
+
+---
+
+#### 3. `GET /formats` - 查看支援格式
+
 ```bash
-docker compose run --rm markitdown markitdown --use-plugins /app/input/document.pdf -o /app/output/document.md
+curl http://localhost:51083/formats
 ```
 
-### 查看已安裝插件
+---
+
+#### 4. `GET /health` - 健康檢查
+
 ```bash
-docker compose run --rm markitdown markitdown --list-plugins
+curl http://localhost:51083/health
 ```
 
-### 查看幫助
+---
+
+## 💻 程式碼範例
+
+### Python
+
+```python
+import requests
+
+# 上傳文件轉換
+with open('document.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        data={'enable_plugins': 'false', 'return_format': 'markdown'}
+    )
+
+# 儲存結果
+with open('output.md', 'w') as f:
+    f.write(response.text)
+
+print(f"轉換完成！狀態碼：{response.status_code}")
+```
+
+### Python（JSON 格式）
+
+```python
+import requests
+
+with open('document.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        params={'return_format': 'json'}
+    )
+
+data = response.json()
+print(f"檔名：{data['filename']}")
+print(f"內容長度：{len(data['content'])}")
+print(data['content'][:500])  # 預覽前 500 字
+```
+
+### cURL（批量轉換）
+
 ```bash
-docker compose run --rm markitdown markitdown --help
+# 批量轉換 input/ 目錄下所有 PDF
+for file in input/*.pdf; do
+    filename=$(basename "$file" .pdf)
+    curl -X POST "http://localhost:51083/convert" \
+        -F "file=@$file" \
+        -o "output/${filename}.md"
+    echo "轉換完成：$filename.md"
+done
 ```
 
-## 🔧 自定義配置
+### Node.js
 
-### 添加環境變數
+```javascript
+const FormData = require('form-data');
+const fs = require('fs');
+const axios = require('axios');
 
-在 `docker-compose.yml` 中添加：
+const form = new FormData();
+form.append('file', fs.createReadStream('document.pdf'));
+form.append('return_format', 'json');
 
+const response = await axios.post(
+    'http://localhost:51083/convert',
+    form,
+    { headers: form.getHeaders() }
+);
+
+console.log('轉換成功:', response.data.filename);
+fs.writeFileSync('output.md', response.data.content);
+```
+
+---
+
+## 🔧 進階配置
+
+### 啟用 OCR 插件
+
+如需使用 OCR 功能（從圖片提取文字），需要設置 OpenAI API Key：
+
+**docker-compose.yml：**
 ```yaml
 environment:
-  - OPENAI_API_KEY=your_key_here
-  - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=your_endpoint
+  - OPENAI_API_KEY=sk-your-key-here
+```
+
+**API 請求：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@scanned-document.pdf" \
+  -F "enable_plugins=true" \
+  -o output.md
 ```
 
 ### 調整資源限制
 
-編輯 `docker-compose.yml` 中的 `deploy.resources` 部分。
+編輯 `docker-compose.yml` 中的 `deploy.resources` 部分：
 
-## 📊 依賴說明
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 4G    # 增加記憶體
+      cpus: '4.0'   # 增加 CPU
+```
 
-本容器已預裝所有 MarkItDown 可選依賴：
+### 持久化存儲
 
-| 依賴組 | 包含 |
-|--------|------|
-| `[all]` | 所有依賴 |
-| 系統工具 | poppler-utils (PDF)、ffmpeg (音頻)、tesseract-ocr (OCR) |
-| Python 插件 | markitdown-ocr |
+添加數據卷以保留轉換記錄：
 
-## 🗑️ 清理
+```yaml
+volumes:
+  - ./data:/app/data
+```
+
+---
+
+## 📊 API 互動文件
+
+啟動服務後，訪問 **Swagger UI**：
+
+```
+http://localhost:51083/docs
+```
+
+或 **ReDoc**：
+
+```
+http://localhost:51083/redoc
+```
+
+---
+
+## 🗑️ 停止與清理
 
 ```bash
-# 停止容器
+# 停止服務
 docker compose down
 
-# 刪除映像
+# 停止並刪除映像
 docker compose down --rmi all
 
-# 清理輸入/輸出目錄
-rm -rf input/* output/*
+# 查看日誌
+docker compose logs -f
+
+# 重新啟動
+docker compose restart
 ```
+
+---
+
+## 🔍 故障排除
+
+### 容器無法啟動
+
+```bash
+# 查看日誌
+docker compose logs markitdown-api
+
+# 檢查端口是否被佔用
+lsof -i :51083
+```
+
+### 轉換失敗
+
+1. 檢查文件格式是否支援：`curl http://localhost:51083/formats`
+2. 查看容器日誌：`docker compose logs -f`
+3. 確認文件大小（建議 < 50MB）
+
+### 記憶體不足
+
+增加 `docker-compose.yml` 中的記憶體限制：
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 4G
+```
+
+---
 
 ## 📄 授權
 
@@ -139,4 +311,5 @@ MarkItDown 由 Microsoft 開源，遵循 MIT 授權。
 ---
 
 **建立者：** kimhsiao  
-**日期：** 2026-03-13
+**日期：** 2026-03-13  
+**API 端口：** 51083

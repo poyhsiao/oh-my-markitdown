@@ -1,21 +1,35 @@
 services:
-  markitdown:
+  markitdown-api:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: markitdown
+    container_name: markitdown-api
+    ports:
+      # 對外 API 端口：51083
+      - "51083:8000"
     volumes:
-      # 輸入目錄：放置要轉換的文件
-      - ./input:/app/input
-      # 輸出目錄：轉換後的 Markdown 文件
-      - ./output:/app/output
-    # 保持容器運行（可選，用於交互式使用）
-    stdin_open: true
-    tty: true
-    # 資源限制（可選）
+      # 持久化存儲（可選）
+      - ./data:/app/data
+    # 環境變數（可選）
+    environment:
+      # 如需使用 OCR 或圖片描述，可設置 OpenAI API Key
+      # - OPENAI_API_KEY=your_key_here
+      - PYTHONUNBUFFERED=1
+    # 資源限制
     deploy:
       resources:
         limits:
           memory: 2G
+          cpus: '2.0'
         reservations:
           memory: 512M
+          cpus: '0.5'
+    # 重啟策略
+    restart: unless-stopped
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
