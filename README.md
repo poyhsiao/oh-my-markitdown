@@ -1,6 +1,33 @@
 # MarkItDown API Docker 🐳🚀
 
-透過 HTTP API 將各種文件格式轉換為 Markdown！
+透過 HTTP API 將各種文件格式轉換為 Markdown，支援 **7 種亞洲語言 OCR**！
+
+## 📋 目錄
+
+- [特色功能](#-特色功能)
+- [支援的文件格式](#-支援的文件格式)
+- [OCR 多語言支援](#-ocr-多語言支援)
+- [快速開始](#-快速開始)
+- [環境變數配置](#-環境變數配置)
+- [API 使用說明](#-api-使用說明)
+- [程式碼範例](#-程式碼範例)
+- [進階配置](#-進階配置)
+- [故障排除](#-故障排除)
+
+---
+
+## ✨ 特色功能
+
+- ✅ **7 種亞洲語言 OCR**：繁中、簡中、英文、日文、韓文、泰文、越南文
+- ✅ **即時轉換**：上傳文件後立即回傳 Markdown
+- ✅ **雙格式輸出**：支援 `markdown` 或 `json` 格式
+- ✅ **環境變數配置**：端口、路徑、OCR 預設語言皆可自訂
+- ✅ **批量處理**：支援目錄批量轉換
+- ✅ **Swagger UI**：完整的互動式 API 文件
+- ✅ **健康檢查**：內建健康檢查端點
+- ✅ **資源限制**：可調整記憶體、CPU 限制
+
+---
 
 ## 📦 支援的文件格式
 
@@ -13,34 +40,58 @@
 | **資料** | CSV、JSON、XML |
 | **其他** | ZIP、EPub、Outlook 郵件 |
 
+---
+
 ## 🔤 OCR 多語言支援
 
-| 語言代碼 | 語言 | 說明 |
-|----------|------|------|
-| `chi_tra` | 繁體中文 | 台灣、香港、澳門繁體字 |
-| `chi_sim` | 簡體中文 | 中國大陸簡體字 |
-| `eng` | 英文 | English |
-| `jpn` | 日文 | 日本語（含漢字、平假名、片假名） |
-| `kor` | 韓文 | 한국어（諺文） |
-| `tha` | 泰文 | ภาษาไทย |
-| `vie` | 越南文 | Tiếng Việt（國語字） |
+| 語言代碼 | 語言 | 文字系統 | 適用場景 |
+|----------|------|----------|----------|
+| `chi_tra` | 繁體中文 | 繁體漢字 | 台灣、香港、澳門文件 |
+| `chi_sim` | 簡體中文 | 簡體漢字 | 中國大陸文件 |
+| `eng` | 英文 | 拉丁字母 | 英文文件 |
+| `jpn` | 日文 | 漢字 + 假名 | 日本語文件 |
+| `kor` | 韓文 | 諺文 (Hangul) | 한국어 文件 |
+| `tha` | 泰文 | 泰文字母 | ภาษาไทย 文件 |
+| `vie` | 越南文 | 國語字 | Tiếng Việt 文件 |
 
-**組合使用：** 使用 `+` 符號組合多種語言，例如：
-- `chi_tra+eng`（繁體中文 + 英文，預設）
-- `chi_sim+eng`（簡體中文 + 英文）
-- `chi_tra+jpn+kor+eng`（多語言混合）
-- `tha+eng`（泰文 + 英文）
-- `vie+eng`（越南文 + 英文）
-- `chi_tra+tha+vie+eng`（東南亞多語言混合）
+### 組合使用
+
+使用 `+` 符號組合多種語言：
+
+| 語言組合 | 說明 |
+|----------|------|
+| `chi_tra+eng` | 繁體中文 + 英文（**預設**） |
+| `chi_sim+eng` | 簡體中文 + 英文 |
+| `chi_tra+jpn+kor+eng` | 東北亞多語言混合 |
+| `tha+eng` | 泰文 + 英文 |
+| `vie+eng` | 越南文 + 英文 |
+| `chi_tra+tha+vie+eng` | 東南亞多語言混合 |
+| `chi_tra+chi_sim+eng+jpn+kor+tha+vie` | **完整亞洲語言（7 種全開）** |
+
+---
 
 ## 🚀 快速開始
 
-### 1. 建置並啟動服務
+### 1. 克隆專案
 
 ```bash
 cd /Users/kimhsiao/git/kimhsiao/markitdown-kim
+```
 
-# 建置 Docker 映像
+### 2. 配置環境變數（可選）
+
+```bash
+# 複製範例配置
+cp .env.example .env
+
+# 編輯配置（根據需求調整端口、OCR 語言等）
+nano .env
+```
+
+### 3. 建置並啟動服務
+
+```bash
+# 建置 Docker 映像（首次需要約 5-10 分鐘）
 docker compose build
 
 # 啟動服務
@@ -50,9 +101,9 @@ docker compose up -d
 docker compose logs -f
 ```
 
-服務將在 **http://localhost:51083** 啟動！
+服務將在 **http://localhost:51083** 啟動（或你在 `.env` 中設置的端口）！
 
-### 2. 測試服務
+### 4. 測試服務
 
 ```bash
 # 健康檢查
@@ -60,38 +111,162 @@ curl http://localhost:51083/health
 
 # 查看支援格式
 curl http://localhost:51083/formats
+
+# 查看 OCR 語言支援
+curl http://localhost:51083/ocr-languages
+
+# 查看當前配置
+curl http://localhost:51083/config
+```
+
+---
+
+## ⚙️ 環境變數配置
+
+### 完整配置清單
+
+| 變數名稱 | 預設值 | 說明 |
+|----------|--------|------|
+| **API 端口** |
+| `API_PORT` | `51083` | 對外暴露的端口 |
+| `API_PORT_INTERNAL` | `8000` | 容器內部端口 |
+| `API_HOST` | `0.0.0.0` | API 監聽地址 |
+| `API_DEBUG` | `false` | 調試模式 |
+| `API_WORKERS` | `1` | Worker 數量 |
+| **目錄配置** |
+| `DATA_DIR` | `./data` | 數據持久化目錄 |
+| `INPUT_DIR` | `./input` | 輸入文件目錄 |
+| `OUTPUT_DIR` | `./output` | 輸出文件目錄 |
+| **OCR 配置** |
+| `DEFAULT_OCR_LANG` | `chi_tra+eng` | 預設 OCR 語言 |
+| `ENABLE_PLUGINS_BY_DEFAULT` | `false` | 預設啟用插件 |
+| **上傳限制** |
+| `MAX_UPLOAD_SIZE` | `52428800` | 最大上傳大小（字節，預設 50MB） |
+| **資源限制** |
+| `MEMORY_LIMIT` | `2G` | 記憶體限制 |
+| `MEMORY_RESERVE` | `512M` | 記憶體保留 |
+| `CPU_LIMIT` | `2.0` | CPU 限制 |
+| `CPU_RESERVE` | `0.5` | CPU 保留 |
+| **健康檢查** |
+| `HEALTHCHECK_INTERVAL` | `30s` | 健康檢查間隔 |
+| `HEALTHCHECK_TIMEOUT` | `10s` | 健康檢查超時 |
+| `HEALTHCHECK_RETRIES` | `3` | 重試次數 |
+| `HEALTHCHECK_START_PERIOD` | `40s` | 啟動寬限期 |
+| **日誌配置** |
+| `LOG_MAX_SIZE` | `10m` | 日誌文件最大大小 |
+| `LOG_MAX_FILE` | `3` | 日誌文件最大數量 |
+| **OpenAI（可選）** |
+| `OPENAI_API_KEY` | - | OpenAI API Key |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API 端點 |
+| `OPENAI_MODEL` | `gpt-4o` | OpenAI 模型 |
+| **Azure（可選）** |
+| `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | - | Azure Document Intelligence 端點 |
+| `AZURE_DOCUMENT_INTELLIGENCE_KEY` | - | Azure Document Intelligence Key |
+
+### 使用範例
+
+#### 範例 1：更改 API 端口
+
+```bash
+# .env 文件
+API_PORT=8080
+```
+
+```bash
+# 重啟服務
+docker compose down
+docker compose up -d
+
+# 現在服務在 http://localhost:8080
+```
+
+#### 範例 2：更改預設 OCR 語言為簡體中文
+
+```bash
+# .env 文件
+DEFAULT_OCR_LANG=chi_sim+eng
+```
+
+#### 範例 3：啟用 OpenAI 高品質 OCR
+
+```bash
+# .env 文件
+OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_MODEL=gpt-4o
+```
+
+#### 範例 4：增加資源限制
+
+```bash
+# .env 文件
+MEMORY_LIMIT=4G
+CPU_LIMIT=4.0
 ```
 
 ---
 
 ## 📡 API 使用說明
 
-### API 端點
+### API 端點總覽
 
-#### 1. `POST /convert` - 上傳文件並轉換
+| 方法 | 端點 | 說明 |
+|------|------|------|
+| `GET` | `/` | API 首頁（版本資訊） |
+| `GET` | `/health` | 健康檢查 |
+| `GET` | `/formats` | 查看支援的文件格式 |
+| `GET` | `/ocr-languages` | 查看 OCR 語言支援 |
+| `GET` | `/config` | 查看當前配置 |
+| `POST` | `/convert` | 上傳文件並轉換 |
+| `POST` | `/convert/url` | 從 URL 轉換 |
+| `GET` | `/docs` | Swagger UI 互動文件 |
+| `GET` | `/redoc` | ReDoc 文件 |
 
-**請求：**
+---
+
+### 1. `POST /convert` - 上傳文件並轉換
+
+#### 請求範例
+
+**基本轉換（使用環境變數預設）：**
 ```bash
 curl -X POST "http://localhost:51083/convert" \
-  -F "file=@your-file.pdf" \
+  -F "file=@document.pdf" \
+  -o output.md
+```
+
+**指定 OCR 語言：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@scanned-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+eng" \
   -F "return_format=markdown" \
   -o output.md
 ```
 
-**參數：**
-- `file` (必填): 要轉換的文件檔案
-- `enable_plugins` (選填): 是否啟用插件（預設 `false`）
-- `ocr_lang` (選填): OCR 語言代碼（預設 `chi_tra+eng`，支援 `chi_tra`, `chi_sim`, `eng`, `jpn`, `kor`，可用 `+` 組合）
-- `return_format` (選填): `markdown` 或 `json`（預設 `markdown`）
+**JSON 格式回傳：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@document.pdf" \
+  -F "return_format=json" \
+  -o response.json
+```
 
-**回傳格式：**
+#### 請求參數
+
+| 參數 | 類型 | 必填 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `file` | File | ✅ | - | 要轉換的文件檔案 |
+| `enable_plugins` | Boolean | ❌ | `ENABLE_PLUGINS_BY_DEFAULT` | 是否啟用插件（OCR） |
+| `ocr_lang` | String | ❌ | `DEFAULT_OCR_LANG` | OCR 語言代碼（可用 `+` 組合） |
+| `return_format` | String | ❌ | `markdown` | 回傳格式：`markdown` 或 `json` |
+
+#### 回傳格式
 
 **Markdown（預設）：**
 - Content-Type: `text/markdown`
 - 直接回傳 Markdown 內容
-- Headers 包含原始檔名和轉換時間
+- Headers 包含原始檔名、轉換時間、OCR 語言
 
 **JSON：**
 ```json
@@ -100,6 +275,7 @@ curl -X POST "http://localhost:51083/convert" \
   "filename": "document.pdf",
   "file_size": 123456,
   "conversion_time": "2026-03-13T14:30:00",
+  "ocr_language": "chi_tra+eng",
   "content": "# Markdown 內容...",
   "metadata": {
     "type": "pdf",
@@ -112,41 +288,40 @@ curl -X POST "http://localhost:51083/convert" \
 
 ---
 
-#### 2. `POST /convert/url` - 從 URL 轉換
+### 2. `POST /convert/url` - 從 URL 轉換
 
-**請求：**
+#### 請求範例
+
 ```bash
 curl -X POST "http://localhost:51083/convert/url?url=https://example.com/article" \
   -o output.md
 ```
 
-**參數：**
-- `url` (必填): 網頁 URL 或 YouTube URL
-- `return_format` (選填): `markdown` 或 `json`
+**YouTube 字幕抓取：**
+```bash
+curl -X POST "http://localhost:51083/convert/url?url=https://www.youtube.com/watch?v=VIDEO_ID" \
+  -o transcript.md
+```
+
+#### 請求參數
+
+| 參數 | 類型 | 必填 | 預設值 | 說明 |
+|------|------|------|--------|------|
+| `url` | String | ✅ | - | 網頁 URL 或 YouTube URL |
+| `return_format` | String | ❌ | `markdown` | 回傳格式：`markdown` 或 `json` |
 
 ---
 
-#### 3. `GET /formats` - 查看支援格式
+### 3. `GET /ocr-languages` - 查看 OCR 語言支援
 
-```bash
-curl http://localhost:51083/formats
-```
-
----
-
-#### 4. `GET /health` - 健康檢查
-
-```bash
-curl http://localhost:51083/health
-```
-
-#### 5. `GET /ocr-languages` - 查看 OCR 語言支援
+#### 請求範例
 
 ```bash
 curl http://localhost:51083/ocr-languages
 ```
 
-**回傳範例：**
+#### 回傳範例
+
 ```json
 {
   "supported_languages": {
@@ -154,7 +329,9 @@ curl http://localhost:51083/ocr-languages
     "chi_tra": "繁體中文",
     "eng": "英文",
     "jpn": "日文",
-    "kor": "韓文"
+    "kor": "韓文",
+    "tha": "泰文",
+    "vie": "越南文"
   },
   "default": "chi_tra+eng",
   "usage": "使用 + 符號組合多種語言，例如：chi_tra+eng+jpn",
@@ -164,10 +341,56 @@ curl http://localhost:51083/ocr-languages
     {"code": "eng", "name": "英文"},
     {"code": "jpn", "name": "日文"},
     {"code": "kor", "name": "韓文"},
+    {"code": "tha", "name": "泰文"},
+    {"code": "vie", "name": "越南文"},
     {"code": "chi_tra+eng", "name": "繁體中文 + 英文（預設）"},
     {"code": "chi_sim+eng", "name": "簡體中文 + 英文"},
-    {"code": "chi_tra+jpn+kor+eng", "name": "多語言混合"}
+    {"code": "chi_tra+jpn+kor+eng", "name": "多語言混合"},
+    {"code": "tha+eng", "name": "泰文 + 英文"},
+    {"code": "vie+eng", "name": "越南文 + 英文"},
+    {"code": "chi_tra+tha+vie+eng", "name": "東南亞多語言混合"}
   ]
+}
+```
+
+---
+
+### 4. `GET /config` - 查看當前配置
+
+#### 請求範例
+
+```bash
+curl http://localhost:51083/config
+```
+
+#### 回傳範例
+
+```json
+{
+  "api": {
+    "version": "1.1.0",
+    "debug": false,
+    "max_upload_size": 52428800,
+    "max_upload_size_mb": 50
+  },
+  "ocr": {
+    "default_language": "chi_tra+eng",
+    "plugins_enabled_by_default": false,
+    "supported_languages": {
+      "chi_sim": "簡體中文",
+      "chi_tra": "繁體中文",
+      "eng": "英文",
+      "jpn": "日文",
+      "kor": "韓文",
+      "tha": "泰文",
+      "vie": "越南文"
+    }
+  },
+  "openai": {
+    "configured": true,
+    "model": "gpt-4o",
+    "base_url": "https://api.openai.com/v1"
+  }
 }
 ```
 
@@ -177,25 +400,7 @@ curl http://localhost:51083/ocr-languages
 
 ### Python
 
-```python
-import requests
-
-# 上傳文件轉換
-with open('document.pdf', 'rb') as f:
-    response = requests.post(
-        'http://localhost:51083/convert',
-        files={'file': f},
-        data={'enable_plugins': 'false', 'return_format': 'markdown'}
-    )
-
-# 儲存結果
-with open('output.md', 'w') as f:
-    f.write(response.text)
-
-print(f"轉換完成！狀態碼：{response.status_code}")
-```
-
-### Python（JSON 格式）
+#### 基本轉換
 
 ```python
 import requests
@@ -213,7 +418,7 @@ print(f"內容長度：{len(data['content'])}")
 print(data['content'][:500])  # 預覽前 500 字
 ```
 
-### Python（OCR 轉換 - 繁體中文）
+#### OCR 轉換（繁體中文）
 
 ```python
 import requests
@@ -232,15 +437,14 @@ with open('scanned-doc.jpg', 'rb') as f:
 with open('output.md', 'w', encoding='utf-8') as f:
     f.write(response.text)
 
-print("OCR 轉換完成！")
+print("繁體中文 OCR 轉換完成！")
 ```
 
-### Python（多語言 OCR）
+#### 多語言 OCR（東北亞）
 
 ```python
 import requests
 
-# 混合語言文件（繁中 + 英文 + 日文 + 韓文）
 with open('mixed-asian-doc.pdf', 'rb') as f:
     response = requests.post(
         'http://localhost:51083/convert',
@@ -257,7 +461,7 @@ print(f"檔名：{data['filename']}")
 print(f"內容長度：{len(data['content'])} 字元")
 ```
 
-### Python（東南亞語言 OCR）
+#### 東南亞語言 OCR（泰文 + 越南文）
 
 ```python
 import requests
@@ -297,7 +501,7 @@ with open('vietnamese-output.md', 'w', encoding='utf-8') as f:
 print("越南文 OCR 轉換完成！")
 ```
 
-### Python（完整亞洲語言支援）
+#### 完整亞洲語言（7 種全開）
 
 ```python
 import requests
@@ -332,18 +536,145 @@ data = response.json()
 print(f"轉換成功！內容長度：{len(data['content'])} 字元")
 ```
 
-### cURL（批量轉換）
+#### 批量轉換
+
+```python
+import requests
+from pathlib import Path
+
+# 批量轉換 input/ 目錄下所有 PDF
+input_dir = Path('input')
+output_dir = Path('output')
+output_dir.mkdir(exist_ok=True)
+
+for pdf_file in input_dir.glob('*.pdf'):
+    print(f"正在轉換：{pdf_file.name}")
+    
+    with open(pdf_file, 'rb') as f:
+        response = requests.post(
+            'http://localhost:51083/convert',
+            files={'file': f},
+            data={
+                'enable_plugins': 'true',
+                'ocr_lang': 'chi_tra+eng'
+            }
+        )
+    
+    output_file = output_dir / f"{pdf_file.stem}.md"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(response.text)
+    
+    print(f"✓ 完成：{output_file.name}")
+
+print("\n批量轉換完成！")
+```
+
+---
+
+### cURL
+
+#### 基本轉換
 
 ```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@document.pdf" \
+  -o output.md
+```
+
+#### OCR 轉換（指定語言）
+
+```bash
+# 繁體中文
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@scanned-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+eng" \
+  -o output.md
+
+# 簡體中文
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@chinese-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_sim+eng" \
+  -o output.md
+
+# 日文
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@japanese-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=jpn+eng" \
+  -o output.md
+
+# 韓文
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@korean-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=kor+eng" \
+  -o output.md
+
+# 泰文
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@thai-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=tha+eng" \
+  -o output.md
+
+# 越南文
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@vietnamese-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=vie+eng" \
+  -o output.md
+```
+
+#### 多語言混合
+
+```bash
+# 東北亞多語言
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@northeast-asia-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+jpn+kor+eng" \
+  -o output.md
+
+# 東南亞多語言
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@southeast-asia-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+tha+vie+eng" \
+  -o output.md
+
+# 完整亞洲語言（7 種）
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@all-asia-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+chi_sim+eng+jpn+kor+tha+vie" \
+  -o output.md
+```
+
+#### 批量轉換（Shell 腳本）
+
+```bash
+#!/bin/bash
+
 # 批量轉換 input/ 目錄下所有 PDF
 for file in input/*.pdf; do
     filename=$(basename "$file" .pdf)
+    echo "正在轉換：$filename.pdf"
+    
     curl -X POST "http://localhost:51083/convert" \
         -F "file=@$file" \
+        -F "enable_plugins=true" \
+        -F "ocr_lang=chi_tra+eng" \
         -o "output/${filename}.md"
-    echo "轉換完成：$filename.md"
+    
+    echo "✓ 完成：${filename}.md"
 done
+
+echo "\n批量轉換完成！"
 ```
+
+---
 
 ### Node.js
 
@@ -352,6 +683,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 const axios = require('axios');
 
+// 基本轉換
 const form = new FormData();
 form.append('file', fs.createReadStream('document.pdf'));
 form.append('return_format', 'json');
@@ -364,144 +696,217 @@ const response = await axios.post(
 
 console.log('轉換成功:', response.data.filename);
 fs.writeFileSync('output.md', response.data.content);
+
+// OCR 轉換（繁體中文）
+const ocrForm = new FormData();
+ocrForm.append('file', fs.createReadStream('scanned-doc.jpg'));
+ocrForm.append('enable_plugins', 'true');
+ocrForm.append('ocr_lang', 'chi_tra+eng');
+ocrForm.append('return_format', 'markdown');
+
+const ocrResponse = await axios.post(
+    'http://localhost:51083/convert',
+    ocrForm,
+    { headers: ocrForm.getHeaders() }
+);
+
+fs.writeFileSync('output-ocr.md', ocrResponse.data);
+console.log('OCR 轉換完成！');
 ```
 
 ---
 
 ## 🔧 進階配置
 
-### 啟用 OCR 插件
+### 使用 OpenAI 視覺模型（高品質 OCR）
 
-如需使用 OCR 功能（從圖片提取文字），可指定語言：
+如需更高品質的 OCR（特別是複雜文件或低品質掃描），可使用 OpenAI 視覺模型：
 
-**繁體中文文件：**
+#### 1. 配置環境變數
+
 ```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@scanned-document.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=chi_tra+eng" \
-  -o output.md
+# .env 文件
+OPENAI_API_KEY=sk-your-api-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o
 ```
 
-**簡體中文文件：**
+#### 2. 重啟服務
+
 ```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@chinese-doc.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=chi_sim+eng" \
-  -o output.md
+docker compose restart
 ```
 
-**多語言混合（繁中 + 英文 + 日文）：**
+#### 3. 驗證配置
+
 ```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@mixed-lang.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=chi_tra+eng+jpn" \
-  -o output.md
+curl http://localhost:51083/config
 ```
 
-**韓文文件：**
-```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@korean-doc.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=kor+eng" \
-  -o output.md
-```
+#### 4. Python 使用範例
 
-**泰文文件：**
-```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@thai-doc.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=tha+eng" \
-  -o output.md
-```
-
-**越南文文件：**
-```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@vietnamese-doc.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=vie+eng" \
-  -o output.md
-```
-
-**東南亞多語言混合：**
-```bash
-curl -X POST "http://localhost:51083/convert" \
-  -F "file=@sea-mixed-doc.pdf" \
-  -F "enable_plugins=true" \
-  -F "ocr_lang=chi_tra+tha+vie+eng" \
-  -o output.md
-```
-
-**查看支援的 OCR 語言：**
-```bash
-curl http://localhost:51083/ocr-languages
-```
-
-### 使用 OpenAI 視覺模型（進階）
-
-如需更高品質的 OCR，可使用 OpenAI 視覺模型：
-
-**docker-compose.yml：**
-```yaml
-environment:
-  - OPENAI_API_KEY=sk-your-key-here
-```
-
-**Python 範例：**
 ```python
 from markitdown import MarkItDown
 from openai import OpenAI
 
-client = OpenAI()
+client = OpenAI(
+    api_key="sk-your-api-key-here",
+    base_url="https://api.openai.com/v1"
+)
+
 md = MarkItDown(
     enable_plugins=True,
     llm_client=client,
     llm_model="gpt-4o"
 )
+
 result = md.convert("scanned-document.pdf")
 print(result.text_content)
 ```
 
-### 調整資源限制
+---
 
-編輯 `docker-compose.yml` 中的 `deploy.resources` 部分：
+### 使用 Azure Document Intelligence
 
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 4G    # 增加記憶體
-      cpus: '4.0'   # 增加 CPU
+#### 1. 配置環境變數
+
+```bash
+# .env 文件
+AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=https://your-resource.cognitiveservices.azure.com/
+AZURE_DOCUMENT_INTELLIGENCE_KEY=your-azure-key-here
 ```
 
-### 持久化存儲
+#### 2. 使用 Azure 轉換
 
-添加數據卷以保留轉換記錄：
-
-```yaml
-volumes:
-  - ./data:/app/data
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@document.pdf" \
+  -F "enable_plugins=true" \
+  -o output.md
 ```
 
 ---
 
-## 📊 API 互動文件
+### 批量處理目錄
 
-啟動服務後，訪問 **Swagger UI**：
+#### 1. 準備目錄結構
 
+```bash
+mkdir -p input output
 ```
-http://localhost:51083/docs
+
+#### 2. 放入文件
+
+```bash
+cp *.pdf input/
 ```
 
-或 **ReDoc**：
+#### 3. 批量轉換
 
+```bash
+# 使用提供的腳本
+docker compose run --rm markitdown-api bash -c "
+for file in /app/input/*.pdf; do
+    filename=\$(basename \"\$file\" .pdf)
+    markitdown \"\$file\" -o \"/app/output/\${filename}.md\"
+    echo \"轉換完成：\$filename.md\"
+done
+"
 ```
-http://localhost:51083/redoc
+
+---
+
+### 自定義 Docker 配置
+
+#### 增加記憶體限制
+
+```yaml
+# docker-compose.yml
+deploy:
+  resources:
+    limits:
+      memory: 4G
+      cpus: '4.0'
+```
+
+#### 更改日誌配置
+
+```yaml
+# docker-compose.yml
+logging:
+  driver: "json-file"
+  options:
+    max-size: "50m"
+    max-file: "5"
+```
+
+---
+
+## 🔍 故障排除
+
+### 容器無法啟動
+
+```bash
+# 查看日誌
+docker compose logs markitdown-api
+
+# 檢查端口是否被佔用
+lsof -i :51083
+
+# 強制停止並重啟
+docker compose down
+docker compose up -d
+```
+
+### 轉換失敗
+
+```bash
+# 1. 檢查文件格式是否支援
+curl http://localhost:51083/formats
+
+# 2. 查看容器日誌
+docker compose logs -f
+
+# 3. 確認文件大小（建議 < 50MB）
+ls -lh your-file.pdf
+
+# 4. 查看 API 配置
+curl http://localhost:51083/config
+```
+
+### OCR 品質不佳
+
+1. **增加語言組合**：使用更多語言組合（如 `chi_tra+eng+jpn`）
+2. **使用 OpenAI 視覺模型**：配置 `OPENAI_API_KEY`
+3. **提高掃描品質**：確保原始文件清晰
+4. **檢查 Tesseract 語言包**：確認所需語言已安裝
+
+```bash
+# 進入容器檢查語言包
+docker compose exec markitdown-api bash
+tesseract --list-langs
+```
+
+### 記憶體不足
+
+```bash
+# 增加 .env 中的記憶體限制
+MEMORY_LIMIT=4G
+CPU_LIMIT=4.0
+
+# 重啟服務
+docker compose down
+docker compose up -d
+```
+
+### 上傳文件過大
+
+```bash
+# 增加 .env 中的上傳限制
+MAX_UPLOAD_SIZE=104857600  # 100MB
+
+# 重啟服務
+docker compose restart
 ```
 
 ---
@@ -520,38 +925,20 @@ docker compose logs -f
 
 # 重新啟動
 docker compose restart
+
+# 重新建置
+docker compose build --no-cache
+docker compose up -d
 ```
 
 ---
 
-## 🔍 故障排除
+## 📊 API 互動文件
 
-### 容器無法啟動
+啟動服務後，訪問：
 
-```bash
-# 查看日誌
-docker compose logs markitdown-api
-
-# 檢查端口是否被佔用
-lsof -i :51083
-```
-
-### 轉換失敗
-
-1. 檢查文件格式是否支援：`curl http://localhost:51083/formats`
-2. 查看容器日誌：`docker compose logs -f`
-3. 確認文件大小（建議 < 50MB）
-
-### 記憶體不足
-
-增加 `docker-compose.yml` 中的記憶體限制：
-
-```yaml
-deploy:
-  resources:
-    limits:
-      memory: 4G
-```
+- **Swagger UI**: http://localhost:51083/docs
+- **ReDoc**: http://localhost:51083/redoc
 
 ---
 
@@ -561,6 +948,17 @@ MarkItDown 由 Microsoft 開源，遵循 MIT 授權。
 
 ---
 
+## 📞 支援
+
+如有問題，請查看：
+
+- [MarkItDown GitHub](https://github.com/microsoft/markitdown)
+- [Tesseract OCR 文件](https://tesseract-ocr.github.io/)
+
+---
+
 **建立者：** kimhsiao  
-**日期：** 2026-03-13  
-**API 端口：** 51083
+**最後更新：** 2026-03-13  
+**版本：** 1.1.0  
+**API 端口：** 51083（可透過 `API_PORT` 環境變數調整）  
+**支援語言：** 繁體中文、簡體中文、英文、日文、韓文、泰文、越南文

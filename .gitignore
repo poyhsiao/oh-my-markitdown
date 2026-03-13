@@ -30,3 +30,8 @@ api/__pycache__/
 
 # Docker
 .docker-compose.yml.swp
+
+# Environment variables (keep .env.example, ignore .env)
+.env
+.env.local
+.env.*.local

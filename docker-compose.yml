@@ -5,31 +5,67 @@ services:
       dockerfile: Dockerfile
     container_name: markitdown-api
     ports:
-      # 對外 API 端口：51083
-      - "51083:8000"
+      # 對外 API 端口：可透過環境變數 API_PORT 調整（預設 51083）
+      - "${API_PORT:-51083}:8000"
     volumes:
       # 持久化存儲（可選）
-      - ./data:/app/data
-    # 環境變數（可選）
+      - ${DATA_DIR:-./data}:/app/data
+      # 輸入目錄（可選，用於批量處理）
+      - ${INPUT_DIR:-./input}:/app/input
+      # 輸出目錄（可選，用於批量處理）
+      - ${OUTPUT_DIR:-./output}:/app/output
+    # 環境變數
     environment:
-      # 如需使用 OCR 或圖片描述，可設置 OpenAI API Key
-      # - OPENAI_API_KEY=your_key_here
+      # API 配置
+      - API_HOST=${API_HOST:-0.0.0.0}
+      - API_PORT_INTERNAL=${API_PORT_INTERNAL:-8000}
+      - API_DEBUG=${API_DEBUG:-false}
+      - API_WORKERS=${API_WORKERS:-1}
+      
+      # OCR 預設配置
+      - DEFAULT_OCR_LANG=${DEFAULT_OCR_LANG:-chi_tra+eng}
+      - ENABLE_PLUGINS_BY_DEFAULT=${ENABLE_PLUGINS_BY_DEFAULT:-false}
+      
+      # 上傳限制（字節）
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-52428800}  # 預設 50MB
+      
+      # OpenAI（可選，用於高品質 OCR）
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      
+      # Azure Document Intelligence（可選）
+      - AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT=${AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT:-}
+      - AZURE_DOCUMENT_INTELLIGENCE_KEY=${AZURE_DOCUMENT_INTELLIGENCE_KEY:-}
+      
+      # Python 配置
       - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    
     # 資源限制
     deploy:
       resources:
         limits:
-          memory: 2G
-          cpus: '2.0'
+          memory: ${MEMORY_LIMIT:-2G}
+          cpus: '${CPU_LIMIT:-2.0}'
         reservations:
-          memory: 512M
-          cpus: '0.5'
+          memory: ${MEMORY_RESERVE:-512M}
+          cpus: '${CPU_RESERVE:-0.5}'
+    
     # 重啟策略
     restart: unless-stopped
+    
     # 健康檢查
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+      start_period: ${HEALTHCHECK_START_PERIOD:-40s}
+    
+    # 日誌配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${LOG_MAX_SIZE:-10m}"
+        max-file: "${LOG_MAX_FILE:-3}"
