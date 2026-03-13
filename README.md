@@ -93,12 +93,17 @@ cd /Users/kimhsiao/git/kimhsiao/markitdown-kim
 ### 2. 配置環境變數（可選）
 
 ```bash
-# 複製範例配置
+# 複製範例配置（第一次需要）
 cp .env.example .env
 
 # 編輯配置（根據需求調整端口、OCR 語言等）
 nano .env
+# 或使用其他編輯器
+vim .env
+code .env
 ```
+
+**📝 提示：** `.env.example` 文件包含詳細註解，建議先閱讀！
 
 ### 3. 建置並啟動服務
 
@@ -158,77 +163,174 @@ pip list                  # 查看 Python 包
 
 ## ⚙️ 環境變數配置
 
+### 快速開始
+
+```bash
+# 1. 複製範例配置
+cp .env.example .env
+
+# 2. 編輯配置（使用你喜歡的編輯器）
+nano .env
+# 或
+vim .env
+# 或
+code .env
+
+# 3. 重啟服務使配置生效
+docker compose restart
+```
+
 ### 完整配置清單
 
 | 變數名稱 | 預設值 | 說明 |
 |----------|--------|------|
-| **API 端口** |
-| `API_PORT` | `51083` | 對外暴露的端口 |
-| `API_PORT_INTERNAL` | `8000` | 容器內部端口 |
+| **🌐 API 端口** |
+| `API_PORT` | `51083` | 對外暴露的端口（瀏覽器訪問） |
+| `API_PORT_INTERNAL` | `8000` | 容器內部端口（通常不需修改） |
 | `API_HOST` | `0.0.0.0` | API 監聽地址 |
-| `API_DEBUG` | `false` | 調試模式 |
-| `API_WORKERS` | `1` | Worker 數量 |
-| **目錄配置** |
+| `API_DEBUG` | `false` | 調試模式（true/false） |
+| `API_WORKERS` | `1` | Worker 數量（建議：CPU 核心數） |
+| **📁 目錄配置** |
 | `DATA_DIR` | `./data` | 數據持久化目錄 |
-| `INPUT_DIR` | `./input` | 輸入文件目錄 |
-| `OUTPUT_DIR` | `./output` | 輸出文件目錄 |
-| **OCR 配置** |
-| `DEFAULT_OCR_LANG` | `chi_tra+eng` | 預設 OCR 語言 |
-| `ENABLE_PLUGINS_BY_DEFAULT` | `false` | 預設啟用插件 |
-| **上傳限制** |
+| `INPUT_DIR` | `./input` | 輸入文件目錄（批量處理） |
+| `OUTPUT_DIR` | `./output` | 輸出文件目錄（批量處理） |
+| **🔤 OCR 配置** |
+| `DEFAULT_OCR_LANG` | `chi_tra+eng` | 預設 OCR 語言（見下方說明） |
+| `ENABLE_PLUGINS_BY_DEFAULT` | `false` | 預設啟用插件（true/false） |
+| **📤 上傳限制** |
 | `MAX_UPLOAD_SIZE` | `52428800` | 最大上傳大小（字節，預設 50MB） |
-| **資源限制** |
+| **💻 資源限制** |
 | `MEMORY_LIMIT` | `2G` | 記憶體限制 |
 | `MEMORY_RESERVE` | `512M` | 記憶體保留 |
-| `CPU_LIMIT` | `2.0` | CPU 限制 |
+| `CPU_LIMIT` | `2.0` | CPU 限制（核心數） |
 | `CPU_RESERVE` | `0.5` | CPU 保留 |
-| **健康檢查** |
+| **🏥 健康檢查** |
 | `HEALTHCHECK_INTERVAL` | `30s` | 健康檢查間隔 |
 | `HEALTHCHECK_TIMEOUT` | `10s` | 健康檢查超時 |
 | `HEALTHCHECK_RETRIES` | `3` | 重試次數 |
 | `HEALTHCHECK_START_PERIOD` | `40s` | 啟動寬限期 |
-| **日誌配置** |
+| **📝 日誌配置** |
 | `LOG_MAX_SIZE` | `10m` | 日誌文件最大大小 |
 | `LOG_MAX_FILE` | `3` | 日誌文件最大數量 |
-| **OpenAI（可選）** |
+| **🤖 OpenAI（可選）** |
 | `OPENAI_API_KEY` | - | OpenAI API Key |
 | `OPENAI_BASE_URL` | `https://api.openai.com/v1` | OpenAI API 端點 |
 | `OPENAI_MODEL` | `gpt-4o` | OpenAI 模型 |
-| **Azure（可選）** |
+| **☁️ Azure（可選）** |
 | `AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT` | - | Azure Document Intelligence 端點 |
 | `AZURE_DOCUMENT_INTELLIGENCE_KEY` | - | Azure Document Intelligence Key |
 
-### 使用範例
+### 常用配置範例
 
-#### 範例 1：更改 API 端口
+#### 範例 1：更改 API 端口為 8080
 
 ```bash
 # .env 文件
 API_PORT=8080
-```
 
-```bash
 # 重啟服務
-docker compose down
-docker compose up -d
+docker compose restart
 
 # 現在服務在 http://localhost:8080
 ```
 
-#### 範例 2：更改預設 OCR 語言為簡體中文
+#### 範例 2：預設使用簡體中文 OCR
 
 ```bash
 # .env 文件
 DEFAULT_OCR_LANG=chi_sim+eng
+
+# 重啟服務
+docker compose restart
 ```
 
-#### 範例 3：啟用 OpenAI 高品質 OCR
+#### 範例 3：增加上傳限制到 100MB
 
 ```bash
 # .env 文件
-OPENAI_API_KEY=sk-your-api-key-here
-OPENAI_MODEL=gpt-4o
+MAX_UPLOAD_SIZE=104857600  # 100MB = 100 * 1024 * 1024
+
+# 重啟服務
+docker compose restart
 ```
+
+#### 範例 4：啟用 OpenAI 高品質 OCR
+
+```bash
+# .env 文件
+OPENAI_API_KEY=sk-proj-your-api-key-here
+OPENAI_MODEL=gpt-4o
+
+# 重啟服務
+docker compose restart
+
+# 驗證配置
+curl http://localhost:51083/config
+```
+
+#### 範例 5：增加資源限制（高性能需求）
+
+```bash
+# .env 文件
+MEMORY_LIMIT=4G
+CPU_LIMIT=4.0
+
+# 重啟服務
+docker compose restart
+```
+
+#### 範例 6：主要處理東南亞語言文件
+
+```bash
+# .env 文件
+DEFAULT_OCR_LANG=chi_tra+tha+vie+eng
+
+# 重啟服務
+docker compose restart
+```
+
+#### 範例 7：開啟調試模式（開發環境）
+
+```bash
+# .env 文件
+API_DEBUG=true
+
+# 重啟服務
+docker compose restart
+
+# 現在 API 會返回詳細錯誤信息
+```
+
+#### 範例 8：批量處理大量文件
+
+```bash
+# .env 文件
+MAX_UPLOAD_SIZE=524288000  # 500MB
+MEMORY_LIMIT=4G
+CPU_LIMIT=4.0
+API_WORKERS=4
+
+# 重啟服務
+docker compose restart
+```
+
+---
+
+### 📋 配置檢查清單
+
+**基本使用（推薦新手）：**
+- [x] `API_PORT=51083`（或你想要的端口）
+- [x] `DEFAULT_OCR_LANG=chi_tra+eng`（根據主要文件語言調整）
+
+**進階使用：**
+- [ ] `MAX_UPLOAD_SIZE`（如需上傳大於 50MB 的文件）
+- [ ] `MEMORY_LIMIT` 和 `CPU_LIMIT`（如需更高性能）
+- [ ] `OPENAI_API_KEY`（如需使用 OpenAI 高品質 OCR）
+
+**生產環境：**
+- [ ] `API_DEBUG=false`（關閉調試模式）
+- [ ] `LOG_MAX_SIZE` 和 `LOG_MAX_FILE`（調整日誌大小）
+- [ ] 健康檢查配置（根據監控需求調整）
 
 #### 範例 4：增加資源限制
 
