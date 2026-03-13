@@ -25,6 +25,7 @@
 - ✅ **環境變數配置**：端口、路徑、OCR 預設語言皆可自訂
 - ✅ **批量處理**：支援目錄批量轉換
 - ✅ **自動監控轉換**：放入 `input/` 目錄自動轉換到 `output/` ✨
+- ✅ **命令行工具**：靈活的 CLI，支持文件/URL/批量處理 ✨
 - ✅ **Swagger UI**：完整的互動式 API 文件
 - ✅ **健康檢查**：內建健康檢查端點
 - ✅ **資源限制**：可調整記憶體、CPU 限制
@@ -186,6 +187,39 @@ ls output/
 ```
 
 **詳細說明請參考：** [AUTO_CONVERT.md](AUTO_CONVERT.md)
+
+---
+
+## 💻 命令行工具（CLI）
+
+### 快速使用
+
+```bash
+# 轉換單一文件
+./markitdown document.pdf output.md
+
+# 從 URL 轉換
+./markitdown --url https://example.com output.md
+
+# 批量轉換
+./markitdown *.pdf -o ./output/
+
+# 查看幫助
+./markitdown --help
+```
+
+### 常用選項
+
+| 選項 | 說明 |
+|------|------|
+| `-o, --output DIR` | 輸出目錄 |
+| `-u, --url URL` | 從 URL 轉換 |
+| `--ocr-lang LANG` | OCR 語言（預設：chi_tra+eng） |
+| `--no-plugins` | 禁用插件 |
+| `-v, --verbose` | 詳細輸出 |
+| `--stdout` | 輸出到 stdout |
+
+**詳細說明請參考：** [CLI_USAGE.md](CLI_USAGE.md)
 
 ### 配置選項
 

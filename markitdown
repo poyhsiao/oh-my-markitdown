@@ -1,0 +1,102 @@
+#!/bin/bash
+
+# MarkItDown CLI 包裝腳本
+# 使用方式：
+#   ./markitdown document.pdf output.md
+#   ./markitdown --url https://example.com output.md
+#   ./markitdown *.pdf -o ./output/
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# 檢查 Docker 是否運行
+if ! docker info > /dev/null 2>&1; then
+    echo "❌ Docker 未運行，請先啟動 Docker"
+    exit 1
+fi
+
+# 檢查是否為 URL 模式
+if [[ "$1" == "--url" ]] || [[ "$1" == "-u" ]]; then
+    # URL 模式：使用 API
+    API_PORT="${API_PORT:-51083}"
+    API_URL="http://localhost:${API_PORT}/convert/url"
+    
+    # 解析參數
+    URL=""
+    OUTPUT=""
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --url|-u)
+                URL="$2"
+                shift 2
+                ;;
+            --output|-o)
+                OUTPUT="$2"
+                shift 2
+                ;;
+            *)
+                if [[ -z "$URL" ]]; then
+                    URL="$1"
+                elif [[ -z "$OUTPUT" ]]; then
+                    OUTPUT="$1"
+                fi
+                shift
+                ;;
+        esac
+    done
+    
+    if [[ -z "$URL" ]]; then
+        echo "錯誤：請提供 URL"
+        echo "使用方式：$0 --url https://example.com [output.md]"
+        exit 1
+    fi
+    
+    # 自動生成輸出文件名
+    if [[ -z "$OUTPUT" ]]; then
+        OUTPUT="output.md"
+    fi
+    
+    echo "🔄 正在從 URL 轉換：$URL"
+    
+    # 發送請求
+    if curl -s -X POST "${API_URL}?url=${URL}" -o "$OUTPUT"; then
+        echo "✓ 轉換成功：$OUTPUT"
+    else
+        echo "❌ 轉換失敗"
+        exit 1
+    fi
+    
+else
+    # 文件模式：使用 Docker 運行 CLI
+    if [[ $# -eq 0 ]]; then
+        echo "MarkItDown CLI - 轉換文件為 Markdown"
+        echo ""
+        echo "使用方式："
+        echo "  $0 document.pdf output.md"
+        echo "  $0 *.pdf -o ./output/"
+        echo "  $0 --url https://example.com output.md"
+        echo ""
+        echo "選項："
+        echo "  -o, --output DIR    輸出目錄"
+        echo "  --url URL           從 URL 轉換"
+        echo "  --ocr-lang LANG     OCR 語言（預設：chi_tra+eng）"
+        echo "  --no-plugins        禁用插件"
+        echo "  -v, --verbose       詳細輸出"
+        echo "  --stdout            輸出到 stdout"
+        echo ""
+        echo "範例："
+        echo "  $0 document.pdf output.md"
+        echo "  $0 *.pdf -o ./output/"
+        echo "  $0 --url https://example.com output.md"
+        exit 0
+    fi
+    
+    # 運行 Docker 容器
+    docker run --rm \
+        -v "${PWD}:/workspace" \
+        -w /workspace \
+        markitdown-api:latest \
+        python cli.py "$@"
+fi

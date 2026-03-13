@@ -76,6 +76,12 @@ RUN mkdir -p /app/input /app/output /app/data /app/api
 # 複製 API 服務代碼
 COPY api/main.py /app/api/main.py
 
+# 複製 CLI 工具
+COPY cli.py /app/cli.py
+
+# 設置執行權限
+RUN chmod +x /app/cli.py
+
 # 暴露 API 端口
 EXPOSE 8000
 
@@ -83,5 +89,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# 啟動 API 服務
+# 預設啟動 API 服務
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
