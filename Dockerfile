@@ -22,6 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-eng \
     tesseract-ocr-jpn \
     tesseract-ocr-kor \
+    tesseract-ocr-tha \
+    tesseract-ocr-vie \
     # 清理
     && rm -rf /var/lib/apt/lists/*
 

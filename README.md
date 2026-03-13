@@ -22,11 +22,16 @@
 | `eng` | 英文 | English |
 | `jpn` | 日文 | 日本語（含漢字、平假名、片假名） |
 | `kor` | 韓文 | 한국어（諺文） |
+| `tha` | 泰文 | ภาษาไทย |
+| `vie` | 越南文 | Tiếng Việt（國語字） |
 
 **組合使用：** 使用 `+` 符號組合多種語言，例如：
 - `chi_tra+eng`（繁體中文 + 英文，預設）
 - `chi_sim+eng`（簡體中文 + 英文）
 - `chi_tra+jpn+kor+eng`（多語言混合）
+- `tha+eng`（泰文 + 英文）
+- `vie+eng`（越南文 + 英文）
+- `chi_tra+tha+vie+eng`（東南亞多語言混合）
 
 ## 🚀 快速開始
 
@@ -252,6 +257,81 @@ print(f"檔名：{data['filename']}")
 print(f"內容長度：{len(data['content'])} 字元")
 ```
 
+### Python（東南亞語言 OCR）
+
+```python
+import requests
+
+# 泰文文件
+with open('thai-document.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        data={
+            'enable_plugins': 'true',
+            'ocr_lang': 'tha+eng',
+            'return_format': 'markdown'
+        }
+    )
+
+with open('thai-output.md', 'w', encoding='utf-8') as f:
+    f.write(response.text)
+
+print("泰文 OCR 轉換完成！")
+
+# 越南文文件
+with open('vietnamese-document.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        data={
+            'enable_plugins': 'true',
+            'ocr_lang': 'vie+eng',
+            'return_format': 'markdown'
+        }
+    )
+
+with open('vietnamese-output.md', 'w', encoding='utf-8') as f:
+    f.write(response.text)
+
+print("越南文 OCR 轉換完成！")
+```
+
+### Python（完整亞洲語言支援）
+
+```python
+import requests
+
+# 支援的所有亞洲語言
+ocr_languages = [
+    "chi_tra",  # 繁體中文
+    "chi_sim",  # 簡體中文
+    "eng",      # 英文
+    "jpn",      # 日文
+    "kor",      # 韓文
+    "tha",      # 泰文
+    "vie",      # 越南文
+]
+
+# 全語言混合（適合多語言文件）
+all_langs = "+".join(ocr_languages)
+print(f"使用語言組合：{all_langs}")
+
+with open('multi-lang-asia.pdf', 'rb') as f:
+    response = requests.post(
+        'http://localhost:51083/convert',
+        files={'file': f},
+        data={
+            'enable_plugins': 'true',
+            'ocr_lang': all_langs,
+            'return_format': 'json'
+        }
+    )
+
+data = response.json()
+print(f"轉換成功！內容長度：{len(data['content'])} 字元")
+```
+
 ### cURL（批量轉換）
 
 ```bash
@@ -327,6 +407,33 @@ curl -X POST "http://localhost:51083/convert" \
   -F "file=@korean-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=kor+eng" \
+  -o output.md
+```
+
+**泰文文件：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@thai-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=tha+eng" \
+  -o output.md
+```
+
+**越南文文件：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@vietnamese-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=vie+eng" \
+  -o output.md
+```
+
+**東南亞多語言混合：**
+```bash
+curl -X POST "http://localhost:51083/convert" \
+  -F "file=@sea-mixed-doc.pdf" \
+  -F "enable_plugins=true" \
+  -F "ocr_lang=chi_tra+tha+vie+eng" \
   -o output.md
 ```
 
