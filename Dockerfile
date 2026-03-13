@@ -1,21 +1,25 @@
 FROM python:3.12-slim
 
 LABEL maintainer="kimhsiao"
-LABEL description="MarkItDown Docker with API - Convert files to Markdown via HTTP API"
+LABEL description="MarkItDown Docker with API - Convert files to Markdown via HTTP API with multi-language OCR"
 
 # 設置工作目錄
 WORKDIR /app
 
 # 安裝系統依賴
+# 參考：https://github.com/microsoft/markitdown + 額外工具
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # PDF 處理
+    # 基礎工具
+    curl \
+    ca-certificates \
+    \
+    # PDF 處理（pdfminer.six, pdfplumber）
     poppler-utils \
-    # 圖片處理
+    \
+    # 圖片處理（EXIF, OCR）
     libmagic1 \
-    ffmpeg \
-    # 字體支持
-    fonts-dejavu-core \
-    # Tesseract OCR + 多語言數據包
+    exiftool \
+    libexif-dev \
     tesseract-ocr \
     tesseract-ocr-chi-sim \
     tesseract-ocr-chi-tra \
@@ -24,26 +28,60 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr-kor \
     tesseract-ocr-tha \
     tesseract-ocr-vie \
+    \
+    # 音頻處理（pydub, SpeechRecognition）
+    ffmpeg \
+    \
+    # 字體支持（OCR 和圖片處理）
+    fonts-dejavu-core \
+    fonts-liberation \
+    fonts-noto-cjk \
+    \
+    # Office 文件處理（olefile, mammoth）
+    libxml2-dev \
+    libxslt1-dev \
+    \
+    # Python 依賴構建工具
+    build-essential \
+    \
     # 清理
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# 安裝 MarkItDown 和 FastAPI
+# 安裝 Python 依賴
+# 參考官方 pyproject.toml 的 all 依賴組
 RUN pip install --no-cache-dir \
+    # MarkItDown 與所有可選依賴
     'markitdown[all]' \
+    \
+    # OCR 插件
     markitdown-ocr \
+    \
+    # FastAPI 和相關依賴
     fastapi \
     uvicorn \
     python-multipart \
-    aiofiles
+    aiofiles \
+    \
+    # OpenAI（可選，用於高品質 OCR）
+    openai \
+    \
+    # Azure Document Intelligence（可選）
+    azure-ai-documentintelligence \
+    azure-identity
 
 # 創建目錄結構
-RUN mkdir -p /app/input /app/output /app/api
+RUN mkdir -p /app/input /app/output /app/data /app/api
 
 # 複製 API 服務代碼
 COPY api/main.py /app/api/main.py
 
 # 暴露 API 端口
 EXPOSE 8000
+
+# 健康檢查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # 啟動 API 服務
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -33,12 +33,24 @@
 
 | 類型 | 格式 |
 |------|------|
-| **文件** | PDF、Word (DOCX/DOC)、PowerPoint (PPTX/PPT)、Excel (XLSX/XLS) |
-| **網頁** | HTML、URL（含 YouTube） |
-| **圖片** | JPG、PNG、GIF、WEBP、BMP、TIFF（含 EXIF + 多語言 OCR） |
+| **文件** | PDF、Word (DOCX/DOC)、PowerPoint (PPTX/PPT)、Excel (XLSX/XLS)、Outlook (MSG) |
+| **網頁** | HTML、URL（含 YouTube 字幕） |
+| **圖片** | JPG、PNG、GIF、WEBP、BMP、TIFF（含 EXIF 元數據 + 多語言 OCR） |
 | **音頻** | MP3、WAV、M4A、FLAC、OGG（含語音轉錄） |
 | **資料** | CSV、JSON、XML |
-| **其他** | ZIP、EPub、Outlook 郵件 |
+| **其他** | ZIP（遍歷內容）、EPub |
+
+### 已安裝的系統依賴
+
+| 工具/庫 | 用途 |
+|---------|------|
+| `poppler-utils` | PDF 處理（pdfminer.six, pdfplumber） |
+| `exiftool` | 圖片/音頻 EXIF 元數據提取 |
+| `tesseract-ocr` + 語言包 | 多語言 OCR（7 種亞洲語言） |
+| `ffmpeg` | 音頻處理（pydub, SpeechRecognition） |
+| `fonts-liberation` / `fonts-noto-cjk` | 字體支持（CJK 字符） |
+| `libxml2-dev` / `libxslt1-dev` | Office 文件處理（mammoth, lxml） |
+| `build-essential` | Python 依賴構建工具 |
 
 ---
 
@@ -91,7 +103,7 @@ nano .env
 ### 3. 建置並啟動服務
 
 ```bash
-# 建置 Docker 映像（首次需要約 5-10 分鐘）
+# 建置 Docker 映像（首次需要約 8-15 分鐘，包含所有依賴）
 docker compose build
 
 # 啟動服務
@@ -102,6 +114,13 @@ docker compose logs -f
 ```
 
 服務將在 **http://localhost:51083** 啟動（或你在 `.env` 中設置的端口）！
+
+**注意：** 首次建置會安裝所有系統依賴和 Python 包，包括：
+- Tesseract OCR + 7 種亞洲語言包
+- exiftool（EXIF 元數據提取）
+- ffmpeg（音頻處理）
+- poppler-utils（PDF 處理）
+- MarkItDown 所有可選依賴
 
 ### 4. 測試服務
 
@@ -117,6 +136,22 @@ curl http://localhost:51083/ocr-languages
 
 # 查看當前配置
 curl http://localhost:51083/config
+```
+
+### 5. 測試依賴（可選）
+
+```bash
+# 測試所有系統依賴和 Python 包是否正常
+./scripts/test-deps.sh
+
+# 或手動進入容器檢查
+docker compose exec markitdown-api bash
+
+# 在容器內檢查
+tesseract --list-langs    # 查看 OCR 語言包
+exiftool -ver             # 查看 exiftool 版本
+ffmpeg -version           # 查看 ffmpeg 版本
+pip list                  # 查看 Python 包
 ```
 
 ---
@@ -929,6 +964,9 @@ docker compose restart
 # 重新建置
 docker compose build --no-cache
 docker compose up -d
+
+# 測試依賴（確認所有工具已正確安裝）
+./scripts/test-deps.sh
 ```
 
 ---
