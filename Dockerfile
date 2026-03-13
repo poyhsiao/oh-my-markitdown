@@ -76,6 +76,9 @@ RUN mkdir -p /app/input /app/output /app/data /app/api
 # 複製 API 服務代碼
 COPY api/main.py /app/api/main.py
 
+# 複製自動轉換腳本
+COPY api/auto_convert.py /app/api/auto_convert.py
+
 # 複製 CLI 工具
 COPY cli.py /app/cli.py
 
