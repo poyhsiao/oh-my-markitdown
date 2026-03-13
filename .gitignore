@@ -1,0 +1,20 @@
+# 輸入/輸出文件
+input/*
+output/*
+
+# 保留 .gitkeep 以保留目錄結構
+!input/.gitkeep
+!output/.gitkeep
+
+# Docker
+*.log
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
