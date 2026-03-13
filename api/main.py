@@ -21,8 +21,22 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support",
-    version="1.1.0",
-    debug=API_DEBUG
+    version="1.2.0",
+    debug=API_DEBUG,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
+
+# 配置 servers 讓 Swagger 知道正確的 API 端點
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 支援的 OCR 語言代碼
@@ -60,11 +74,31 @@ async def health_check():
     """健康檢查端點"""
     return {"status": "ok"}
 
-@app.post("/convert")
+@app.post("/convert", 
+          summary="Convert file to Markdown",
+          description="上傳文件並轉換為 Markdown 格式\n\n"
+                      "**支援的文件格式：**\n"
+                      "- PDF, DOCX, DOC, PPTX, PPT\n"
+                      "- XLSX, XLS\n"
+                      "- 圖片（JPG, PNG, GIF, WEBP 等）\n"
+                      "- 音頻（MP3, WAV, M4A 等）\n"
+                      "- HTML, CSV, JSON, XML\n"
+                      "- ZIP, EPub\n\n"
+                      "**OCR 語言支援：**\n"
+                      "- chi_tra: 繁體中文\n"
+                      "- chi_sim: 簡體中文\n"
+                      "- eng: 英文\n"
+                      "- jpn: 日文\n"
+                      "- kor: 韓文\n"
+                      "- tha: 泰文\n"
+                      "- vie: 越南文\n\n"
+                      "**回傳格式：**\n"
+                      "- markdown: 直接回傳 Markdown 文字\n"
+                      "- json: 回傳 JSON 包含 metadata 和內容")
 async def convert_file(
     file: UploadFile = File(..., description="要轉換的文件檔案"),
-    enable_plugins: bool = Query(None, description="是否啟用插件（如 OCR），預設使用環境變數 ENABLE_PLUGINS_BY_DEFAULT"),
-    ocr_lang: str = Query(None, description=f"OCR 語言代碼，預設使用環境變數 DEFAULT_OCR_LANG ({DEFAULT_OCR_LANG})"),
+    enable_plugins: bool = Query(False, description="是否啟用插件（如 OCR），預設 false"),
+    ocr_lang: str = Query("chi_tra+eng", description="OCR 語言代碼，預設 chi_tra+eng，可用 + 組合多種語言"),
     return_format: str = Query("markdown", description="回傳格式：markdown 或 json", regex="^(markdown|json)$")
 ):
     """
