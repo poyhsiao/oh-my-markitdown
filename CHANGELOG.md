@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### YouTube Video Transcription (Faster-Whisper)
-- **New endpoint:** `POST /convert/youtube` - Transcribe YouTube videos using Faster-Whisper
+- **New endpoint:** `POST /api/v1/convert/youtube` - Transcribe YouTube videos using Faster-Whisper
 - Download YouTube audio and convert to text locally (no API limits!)
 - Support for 16+ languages including Chinese, English, Japanese, Korean, etc.
 - Configurable model sizes (tiny, base, small, medium, large)
@@ -18,14 +18,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automatic metadata extraction (title, duration, uploader, view count)
 
 #### Audio File Transcription (Faster-Whisper)
-- **New endpoint:** `POST /convert/audio` - Upload and transcribe audio files
+- **New endpoint:** `POST /api/v1/convert/audio` - Upload and transcribe audio files
 - Support for MP3, WAV, M4A, FLAC, OGG formats
 - Local processing with Faster-Whisper (no external API required)
 - Multi-language support with automatic language detection
 - No rate limits or API quotas
 
+#### API Versioning
+- All API endpoints now use `/api/v1` prefix
+- Improved API organization and future compatibility
+
 #### Language Support
-- **New endpoint:** `GET /convert/languages` - List supported transcription languages
+- **New endpoint:** `GET /api/v1/convert/languages` - List supported transcription languages
 - 16+ languages supported:
   - Chinese (Traditional & Simplified)
   - English
@@ -49,9 +53,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 #### API Endpoints
-- Removed old `/convert/youtube` endpoint (MarkItDown internal, had YouTube API rate limits)
-- Modified `/convert/url` to reject YouTube URLs with helpful error message
-- All YouTube-related functionality now uses Faster-Whisper
+- Removed `/convert/url` endpoint (no longer needed)
+- All endpoints now use `/api/v1` prefix for better versioning
+- Endpoints renamed:
+  - `/convert` → `/api/v1/convert`
+  - `/formats` → `/api/v1/formats`
+  - `/ocr-languages` → `/api/v1/ocr-languages`
+  - `/config` → `/api/v1/config`
 
 #### Docker Configuration
 - Increased memory limit from 2GB to 4GB (required for Whisper models)
@@ -125,25 +133,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migrating from 0.0.1 to 0.1.0
 
+#### API Endpoint Changes
+All endpoints now use `/api/v1` prefix:
+
+| Old Endpoint | New Endpoint |
+|--------------|--------------|
+| `POST /convert` | `POST /api/v1/convert` |
+| `POST /convert/url` | ❌ Removed (use `/api/v1/convert/youtube` for YouTube) |
+| `GET /formats` | `GET /api/v1/formats` |
+| `GET /ocr-languages` | `GET /api/v1/ocr-languages` |
+| `GET /config` | `GET /api/v1/config` |
+
 #### YouTube URLs
 - **Before:** `POST /convert/url?url=YouTube_URL` (rate limited)
-- **After:** `POST /convert/youtube?url=YouTube_URL&language=zh` (local, no limits)
-
-#### API Response Changes
-The new transcription endpoints return structured metadata:
-
-```json
-{
-  "success": true,
-  "title": "Video Title",
-  "transcript": "Transcribed text...",
-  "metadata": {
-    "language": "zh",
-    "duration": 534.8,
-    "model": "base"
-  }
-}
-```
+- **After:** `POST /api/v1/convert/youtube?url=YouTube_URL&language=zh` (local, no limits)
 
 #### Docker Configuration
 Update your `.env` file:

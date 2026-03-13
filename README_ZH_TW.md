@@ -144,13 +144,13 @@ docker compose logs -f
 curl http://localhost:51083/health
 
 # 查看支援格式
-curl http://localhost:51083/formats
+curl http://localhost:51083/api/v1/formats
 
 # 查看 OCR 語言支援
-curl http://localhost:51083/ocr-languages
+curl http://localhost:51083/api/v1/ocr-languages
 
 # 查看當前配置
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 ### 5. 測試依賴（可選）
@@ -351,7 +351,7 @@ OPENAI_MODEL=gpt-4o
 docker compose restart
 
 # 驗證配置
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 #### 範例 5：增加資源限制（高性能需求）
@@ -436,11 +436,11 @@ CPU_LIMIT=4.0
 |------|------|------|
 | `GET` | `/` | API 首頁（版本資訊） |
 | `GET` | `/health` | 健康檢查 |
-| `GET` | `/formats` | 查看支援的文件格式 |
-| `GET` | `/ocr-languages` | 查看 OCR 語言支援 |
-| `GET` | `/config` | 查看當前配置 |
-| `POST` | `/convert` | 上傳文件並轉換 |
-| `POST` | `/convert/url` | 從 URL 轉換 |
+| `GET` | `/api/v1/formats` | 查看支援的文件格式 |
+| `GET` | `/api/v1/ocr-languages` | 查看 OCR 語言支援 |
+| `GET` | `/api/v1/config` | 查看當前配置 |
+| `POST` | `/api/v1/convert` | 上傳文件並轉換 |
+| `POST` | `/api/v1/convert/youtube` | 從 URL 轉換 |
 | `GET` | `/docs` | Swagger UI 互動文件 |
 | `GET` | `/redoc` | ReDoc 文件 |
 
@@ -452,14 +452,14 @@ CPU_LIMIT=4.0
 
 **基本轉換（使用環境變數預設）：**
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -o output.md
 ```
 
 **指定 OCR 語言：**
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@scanned-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+eng" \
@@ -469,7 +469,7 @@ curl -X POST "http://localhost:51083/convert" \
 
 **JSON 格式回傳：**
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -F "return_format=json" \
   -o response.json
@@ -540,7 +540,7 @@ curl -X POST "http://localhost:51083/convert/url?url=https://www.youtube.com/wat
 #### 請求範例
 
 ```bash
-curl http://localhost:51083/ocr-languages
+curl http://localhost:51083/api/v1/ocr-languages
 ```
 
 #### 回傳範例
@@ -583,7 +583,7 @@ curl http://localhost:51083/ocr-languages
 #### 請求範例
 
 ```bash
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 #### 回傳範例
@@ -799,7 +799,7 @@ print("\n批量轉換完成！")
 #### 基本轉換
 
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -o output.md
 ```
@@ -808,42 +808,42 @@ curl -X POST "http://localhost:51083/convert" \
 
 ```bash
 # 繁體中文
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@scanned-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+eng" \
   -o output.md
 
 # 簡體中文
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@chinese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_sim+eng" \
   -o output.md
 
 # 日文
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@japanese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=jpn+eng" \
   -o output.md
 
 # 韓文
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@korean-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=kor+eng" \
   -o output.md
 
 # 泰文
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@thai-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=tha+eng" \
   -o output.md
 
 # 越南文
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@vietnamese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=vie+eng" \
@@ -854,21 +854,21 @@ curl -X POST "http://localhost:51083/convert" \
 
 ```bash
 # 東北亞多語言
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@northeast-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+jpn+kor+eng" \
   -o output.md
 
 # 東南亞多語言
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@southeast-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+tha+vie+eng" \
   -o output.md
 
 # 完整亞洲語言（7 種）
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@all-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+chi_sim+eng+jpn+kor+tha+vie" \
@@ -885,7 +885,7 @@ for file in input/*.pdf; do
     filename=$(basename "$file" .pdf)
     echo "正在轉換：$filename.pdf"
     
-    curl -X POST "http://localhost:51083/convert" \
+    curl -X POST "http://localhost:51083/api/v1/convert" \
         -F "file=@$file" \
         -F "enable_plugins=true" \
         -F "ocr_lang=chi_tra+eng" \
@@ -963,7 +963,7 @@ docker compose restart
 #### 3. 驗證配置
 
 ```bash
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 #### 4. Python 使用範例
@@ -1002,7 +1002,7 @@ AZURE_DOCUMENT_INTELLIGENCE_KEY=your-azure-key-here
 #### 2. 使用 Azure 轉換
 
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -F "enable_plugins=true" \
   -o output.md
@@ -1085,7 +1085,7 @@ docker compose up -d
 
 ```bash
 # 1. 檢查文件格式是否支援
-curl http://localhost:51083/formats
+curl http://localhost:51083/api/v1/formats
 
 # 2. 查看容器日誌
 docker compose logs -f
@@ -1094,7 +1094,7 @@ docker compose logs -f
 ls -lh your-file.pdf
 
 # 4. 查看 API 配置
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 ### OCR 品質不佳

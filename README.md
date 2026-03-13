@@ -148,13 +148,13 @@ Services will start at **http://localhost:51083** (or your configured port)!
 curl http://localhost:51083/health
 
 # View supported formats
-curl http://localhost:51083/formats
+curl http://localhost:51083/api/v1/formats
 
 # View OCR language support
-curl http://localhost:51083/ocr-languages
+curl http://localhost:51083/api/v1/ocr-languages
 
 # View current configuration
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 ### 5. Test Dependencies (Optional)
@@ -275,7 +275,7 @@ OPENAI_MODEL=gpt-4o
 docker compose restart
 
 # Verify configuration
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 #### Example 5: Increase Resource Limits (High Performance)
@@ -352,14 +352,13 @@ docker compose restart
 |--------|----------|-------------|
 | `GET` | `/` | API Homepage (version info) |
 | `GET` | `/health` | Health check |
-| `GET` | `/formats` | View supported file formats |
-| `GET` | `/ocr-languages` | View OCR language support |
-| `GET` | `/config` | View current configuration |
-| `POST` | `/convert` | Upload file and convert |
-| `POST` | `/convert/url` | Convert from URL |
-| `POST` | `/convert/youtube` | **YouTube video transcription (Faster-Whisper)** ✨ |
-| `POST` | `/convert/audio` | **Audio file transcription (Faster-Whisper)** ✨ |
-| `GET` | `/convert/languages` | **Supported transcription languages** ✨ |
+| `GET` | `/api/v1/formats` | View supported file formats |
+| `GET` | `/api/v1/ocr-languages` | View OCR language support |
+| `GET` | `/api/v1/config` | View current configuration |
+| `POST` | `/api/v1/convert` | Upload file and convert |
+| `POST` | `/api/v1/convert/youtube` | **YouTube video transcription (Faster-Whisper)** ✨ |
+| `POST` | `/api/v1/convert/audio` | **Audio file transcription (Faster-Whisper)** ✨ |
+| `GET` | `/api/v1/convert/languages` | **Supported transcription languages** ✨ |
 | `GET` | `/docs` | Swagger UI interactive docs |
 | `GET` | `/redoc` | ReDoc documentation |
 
@@ -371,14 +370,14 @@ docker compose restart
 
 **Basic conversion (using environment variable defaults):**
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -o output.md
 ```
 
 **Specify OCR language:**
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@scanned-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+eng" \
@@ -388,7 +387,7 @@ curl -X POST "http://localhost:51083/convert" \
 
 **JSON format response:**
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -F "return_format=json" \
   -o response.json
@@ -458,15 +457,15 @@ curl -X POST "http://localhost:51083/convert/url?url=https://example.com/article
 
 ```bash
 # Basic transcription (Chinese)
-curl -X POST "http://localhost:51083/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh" \
+curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh" \
   -o transcript.md
 
 # English transcription
-curl -X POST "http://localhost:51083/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=en" \
+curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=en" \
   -o transcript.md
 
 # JSON format
-curl -X POST "http://localhost:51083/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh&return_format=json" \
+curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh&return_format=json" \
   -o response.json
 ```
 
@@ -513,12 +512,12 @@ Use `/convert/languages` to see all supported languages. Common ones:
 
 ```bash
 # Upload and transcribe
-curl -X POST "http://localhost:51083/convert/audio?language=zh" \
+curl -X POST "http://localhost:51083/api/v1/convert/audio?language=zh" \
   -F "file=@audio.mp3" \
   -o transcript.md
 
 # JSON format
-curl -X POST "http://localhost:51083/convert/audio?language=en&return_format=json" \
+curl -X POST "http://localhost:51083/api/v1/convert/audio?language=en&return_format=json" \
   -F "file=@recording.wav" \
   -o response.json
 ```
@@ -543,7 +542,7 @@ curl -X POST "http://localhost:51083/convert/audio?language=en&return_format=jso
 #### Request Example
 
 ```bash
-curl http://localhost:51083/convert/languages
+curl http://localhost:51083/api/v1/convert/languages
 ```
 
 #### Response Example
@@ -582,7 +581,7 @@ curl http://localhost:51083/convert/languages
 #### Request Example
 
 ```bash
-curl http://localhost:51083/ocr-languages
+curl http://localhost:51083/api/v1/ocr-languages
 ```
 
 #### Response Example
@@ -622,7 +621,7 @@ curl http://localhost:51083/ocr-languages
 #### Request Example
 
 ```bash
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 #### Response Example
@@ -914,7 +913,7 @@ print("\nBatch conversion complete!")
 #### Basic Conversion
 
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -o output.md
 ```
@@ -923,42 +922,42 @@ curl -X POST "http://localhost:51083/convert" \
 
 ```bash
 # Traditional Chinese
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@scanned-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+eng" \
   -o output.md
 
 # Simplified Chinese
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@chinese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_sim+eng" \
   -o output.md
 
 # Japanese
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@japanese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=jpn+eng" \
   -o output.md
 
 # Korean
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@korean-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=kor+eng" \
   -o output.md
 
 # Thai
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@thai-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=tha+eng" \
   -o output.md
 
 # Vietnamese
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@vietnamese-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=vie+eng" \
@@ -969,21 +968,21 @@ curl -X POST "http://localhost:51083/convert" \
 
 ```bash
 # Northeast Asian multi-language
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@northeast-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+jpn+kor+eng" \
   -o output.md
 
 # Southeast Asian multi-language
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@southeast-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+tha+vie+eng" \
   -o output.md
 
 # Complete Asian languages (all 7)
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@all-asia-doc.pdf" \
   -F "enable_plugins=true" \
   -F "ocr_lang=chi_tra+chi_sim+eng+jpn+kor+tha+vie" \
@@ -1000,7 +999,7 @@ for file in input/*.pdf; do
     filename=$(basename "$file" .pdf)
     echo "Converting: $filename.pdf"
     
-    curl -X POST "http://localhost:51083/convert" \
+    curl -X POST "http://localhost:51083/api/v1/convert" \
         -F "file=@$file" \
         -F "enable_plugins=true" \
         -F "ocr_lang=chi_tra+eng" \
@@ -1078,7 +1077,7 @@ docker compose restart
 #### 3. Verify Configuration
 
 ```bash
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 #### 4. Python Usage Example
@@ -1117,7 +1116,7 @@ AZURE_DOCUMENT_INTELLIGENCE_KEY=your-azure-key-here
 #### 2. Use Azure Conversion
 
 ```bash
-curl -X POST "http://localhost:51083/convert" \
+curl -X POST "http://localhost:51083/api/v1/convert" \
   -F "file=@document.pdf" \
   -F "enable_plugins=true" \
   -o output.md
@@ -1200,7 +1199,7 @@ docker compose up -d
 
 ```bash
 # 1. Check if file format is supported
-curl http://localhost:51083/formats
+curl http://localhost:51083/api/v1/formats
 
 # 2. View container logs
 docker compose logs -f
@@ -1209,7 +1208,7 @@ docker compose logs -f
 ls -lh your-file.pdf
 
 # 4. View API configuration
-curl http://localhost:51083/config
+curl http://localhost:51083/api/v1/config
 ```
 
 ### Poor OCR Quality

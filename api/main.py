@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, APIRouter
 from fastapi.responses import Response, StreamingResponse
 from markitdown import MarkItDown
 import tempfile
@@ -87,13 +87,16 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 
 app = FastAPI(
     title="MarkItDown API",
-    description="Convert various file formats to Markdown via HTTP API with multi-language OCR support",
-    version="1.2.0",
+    description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
+    version="0.1.0",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json"
 )
+
+# 創建 API Router with /api/v1 prefix
+api_router = APIRouter(prefix="/api/v1")
 
 # 配置 servers 讓 Swagger 知道正確的 API 端點
 from fastapi.middleware.cors import CORSMiddleware
@@ -126,7 +129,7 @@ async def root():
     return {
         "status": "healthy",
         "service": "MarkItDown API",
-        "version": "1.1.0",
+        "version": "0.1.0",
         "supported_formats": [
             "PDF", "DOCX", "PPTX", "XLSX", "XLS",
             "HTML", "Images", "Audio", "CSV", "JSON", "XML",
@@ -141,7 +144,7 @@ async def health_check():
     """健康檢查端點"""
     return {"status": "ok"}
 
-@app.post("/convert", 
+@api_router.post("/convert", 
           summary="Convert file to Markdown",
           description="上傳文件並轉換為 Markdown 格式\n\n"
                       "**支援的文件格式：**\n"
@@ -331,58 +334,6 @@ async def convert_file(
             detail=f"轉換失敗：{str(e)}"
         )
 
-@app.post("/convert/url")
-async def convert_url(
-    url: str = Query(..., description="要抓取的網頁 URL"),
-    return_format: str = Query("markdown", description="回傳格式：markdown 或 json")
-):
-    """
-    從 URL 抓取內容並轉換為 Markdown
-    
-    - **url**: 網頁 URL（注意：YouTube URL 請使用 /convert/youtube 端點）
-    - **return_format**: 回傳格式（markdown 或 json）
-    """
-    
-    try:
-        # YouTube URL 請使用 /convert/youtube 端點
-        is_youtube = 'youtube.com' in url or 'youtu.be' in url
-        if is_youtube:
-            raise HTTPException(
-                status_code=400,
-                detail="YouTube URL 請使用 /convert/youtube 端點。例如：POST /convert/youtube?url=YouTube_URL"
-            )
-        
-        # 一般 URL 處理
-        result = md.convert(url)
-        
-        if return_format == "markdown":
-            return Response(
-                content=result.text_content.encode('utf-8'),
-                media_type="text/markdown; charset=utf-8",
-                headers={
-                    "X-Source-URL": url,
-                    "X-Conversion-Time": datetime.now().isoformat()
-                }
-            )
-        else:
-            return {
-                "success": True,
-                "url": url,
-                "conversion_time": datetime.now().isoformat(),
-                "content": result.text_content,
-                "metadata": {
-                    "type": result.type,
-                    "source": result.source,
-                    "title": getattr(result, 'title', None),
-                }
-            }
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"轉換失敗：{str(e)}"
-        )
-
 # ==================== Whisper 轉錄端點 ====================
 
 from .whisper_transcribe import (
@@ -392,7 +343,7 @@ from .whisper_transcribe import (
     SUPPORTED_LANGUAGES
 )
 
-@app.post("/convert/youtube")
+@api_router.post("/convert/youtube")
 async def transcribe_youtube(
     url: str = Query(..., description="YouTube 影片 URL"),
     language: str = Query("zh", description="語言代碼（zh, en, ja, ko 等）"),
@@ -453,7 +404,7 @@ async def transcribe_youtube(
         )
 
 
-@app.post("/convert/audio")
+@api_router.post("/convert/audio")
 async def transcribe_audio_file(
     file: UploadFile = File(..., description="音訊檔案"),
     language: str = Query("zh", description="語言代碼"),
@@ -522,7 +473,7 @@ async def transcribe_audio_file(
         )
 
 
-@app.get("/convert/languages")
+@api_router.get("/convert/languages")
 async def list_transcribe_languages():
     """列出 Whisper 支援的語言"""
     return {
@@ -541,7 +492,7 @@ async def list_transcribe_languages():
         }
     }
 
-@app.get("/formats")
+@api_router.get("/formats")
 async def list_formats():
     """列出所有支援的文件格式"""
     return {
@@ -553,7 +504,7 @@ async def list_formats():
         "other": ["ZIP", "EPUB", "MSG", "OUTLOOK"]
     }
 
-@app.get("/ocr-languages")
+@api_router.get("/ocr-languages")
 async def list_ocr_languages():
     """列出所有支援的 OCR 語言"""
     return {
@@ -577,12 +528,12 @@ async def list_ocr_languages():
         ]
     }
 
-@app.get("/config")
+@api_router.get("/config")
 async def get_config():
     """獲取當前 API 配置（敏感信息已隱藏）"""
     return {
         "api": {
-            "version": "1.1.0",
+            "version": "0.1.0",
             "debug": API_DEBUG,
             "max_upload_size": MAX_UPLOAD_SIZE,
             "max_upload_size_mb": MAX_UPLOAD_SIZE // 1024 // 1024,
@@ -598,6 +549,9 @@ async def get_config():
             "base_url": OPENAI_BASE_URL if OPENAI_API_KEY else "N/A",
         }
     }
+
+# 註冊 API Router
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
