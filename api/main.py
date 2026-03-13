@@ -177,10 +177,10 @@ async def convert_file(
             result = md.convert(tmp_path, enable_plugins=enable_plugins)
             
             if return_format == "markdown":
-                # 直接回傳 Markdown 文字
+                # 直接回傳 Markdown 文字（確保 UTF-8 編碼）
                 return Response(
-                    content=result.text_content,
-                    media_type="text/markdown",
+                    content=result.text_content.encode('utf-8'),
+                    media_type="text/markdown; charset=utf-8",
                     headers={
                         "X-Original-Filename": file.filename or "unknown",
                         "X-Conversion-Time": datetime.now().isoformat(),
