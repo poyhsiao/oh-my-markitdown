@@ -6,8 +6,10 @@ Whisper 轉錄模組
 import os
 import tempfile
 import subprocess
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, List
 from faster_whisper import WhisperModel
+
+from .constants import WHISPER_MODEL_CACHE_SIZE
 
 # 從環境變數讀取配置
 DEFAULT_MODEL = os.getenv("WHISPER_MODEL", "base")
@@ -15,7 +17,70 @@ DEFAULT_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 DEFAULT_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
 # 全局模型快取（避免重複載入）
-_model_cache = {}
+class ModelCache:
+    """LRU model cache with size limit."""
+    
+    def __init__(self, max_size: int = WHISPER_MODEL_CACHE_SIZE):
+        self._cache: Dict[str, WhisperModel] = {}
+        self._order: List[str] = []
+        self._max_size = max_size
+    
+    def get(self, key: str) -> Optional[WhisperModel]:
+        if key in self._cache:
+            self._order.remove(key)
+            self._order.append(key)
+            return self._cache[key]
+        return None
+    
+    def set(self, key: str, model: WhisperModel):
+        if key in self._cache:
+            self._order.remove(key)
+        elif len(self._cache) >= self._max_size:
+            oldest_key = self._order.pop(0)
+            del self._cache[oldest_key]
+        self._cache[key] = model
+        self._order.append(key)
+    
+    def clear(self) -> int:
+        count = len(self._cache)
+        self._cache.clear()
+        self._order.clear()
+        return count
+    
+    def remove(self, key: str) -> bool:
+        if key in self._cache:
+            del self._cache[key]
+            self._order.remove(key)
+            return True
+        return False
+    
+    def get_info(self) -> dict:
+        return {
+            "max_size": self._max_size,
+            "current_size": len(self._cache),
+            "cached_models": list(self._cache.keys()),
+        }
+
+_model_cache = ModelCache(max_size=WHISPER_MODEL_CACHE_SIZE)
+
+
+def get_model_cache_info():
+    return _model_cache.get_info()
+
+
+def clear_model_cache() -> int:
+    return _model_cache.clear()
+
+
+def remove_model_from_cache(key: str) -> bool:
+    return _model_cache.remove(key)
+
+
+def update_cache_max_size(max_size: int):
+    _model_cache._max_size = max_size
+    while len(_model_cache._cache) > max_size:
+        oldest_key = _model_cache._order.pop(0)
+        del _model_cache._cache[oldest_key]
 
 def get_model(
     model_size: str = None, 
@@ -40,15 +105,17 @@ def get_model(
     
     cache_key = f"{model_size}_{device}_{compute_type}"
     
-    if cache_key not in _model_cache:
+    model = _model_cache.get(cache_key)
+    if model is None:
         print(f"[Whisper] 載入模型: {model_size} (device={device}, compute_type={compute_type})")
-        _model_cache[cache_key] = WhisperModel(
+        model = WhisperModel(
             model_size,
             device=device,
             compute_type=compute_type
         )
+        _model_cache.set(cache_key, model)
     
-    return _model_cache[cache_key]
+    return model
 
 
 def transcribe_audio(
@@ -270,21 +337,4 @@ def format_transcript_as_markdown(
     return "\n".join(md_lines)
 
 
-# 支援的語言代碼
-SUPPORTED_LANGUAGES = {
-    "zh": "中文",
-    "zh-TW": "繁體中文",
-    "zh-CN": "簡體中文",
-    "en": "英文",
-    "ja": "日文",
-    "ko": "韓文",
-    "fr": "法文",
-    "de": "德文",
-    "es": "西班牙文",
-    "pt": "葡萄牙文",
-    "ru": "俄文",
-    "ar": "阿拉伯文",
-    "hi": "印地文",
-    "th": "泰文",
-    "vi": "越南文",
-}
+from .constants import SUPPORTED_LANGUAGES

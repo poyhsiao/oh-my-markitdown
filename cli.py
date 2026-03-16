@@ -22,14 +22,14 @@ from pathlib import Path
 from datetime import datetime
 from markitdown import MarkItDown
 
-# 支援的文件擴展名
-SUPPORTED_EXTENSIONS = {
-    '.pdf', '.docx', '.doc', '.pptx', '.ppt',
-    '.xlsx', '.xls', '.html', '.htm', '.csv',
-    '.json', '.xml', '.zip', '.epub', '.msg',
-    '.jpg', '.jpeg', '.png', '.gif', '.webp',
-    '.mp3', '.wav', '.m4a', '.flac'
-}
+# Import constants
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports when running as script
+sys.path.insert(0, str(Path(__file__).parent))
+
+from api.constants import SUPPORTED_EXTENSIONS
 
 
 def get_markitdown(enable_plugins=True, ocr_lang='chi_tra+eng'):

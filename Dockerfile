@@ -74,7 +74,8 @@ RUN pip install --no-cache-dir \
     azure-identity \
     \
     # Faster-Whisper（本地 STT，比 Whisper 快 2-4 倍）
-    faster-whisper
+    faster-whisper \
+    psutil
 
 # 創建目錄結構
 RUN mkdir -p /app/input /app/output /app/data /app/api
@@ -82,13 +83,20 @@ RUN mkdir -p /app/input /app/output /app/data /app/api
 # 複製 API 服務代碼
 COPY api/__init__.py /app/api/__init__.py
 COPY api/main.py /app/api/main.py
+COPY api/config.py /app/api/config.py
 COPY api/whisper_transcribe.py /app/api/whisper_transcribe.py
+COPY api/constants.py /app/api/constants.py
+COPY api/middleware.py /app/api/middleware.py
+COPY api/system.py /app/api/system.py
 
 # 複製自動轉換腳本
 COPY api/auto_convert.py /app/api/auto_convert.py
 
 # 複製 CLI 工具
 COPY cli.py /app/cli.py
+
+# 複製腳本目錄
+COPY scripts /app/scripts
 
 # 設置執行權限
 RUN chmod +x /app/cli.py

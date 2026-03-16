@@ -23,18 +23,17 @@ INPUT_DIR = os.getenv("AUTO_INPUT_DIR", "/app/input")
 OUTPUT_DIR = os.getenv("AUTO_OUTPUT_DIR", "/app/output")
 ENABLE_PLUGINS = os.getenv("AUTO_ENABLE_PLUGINS", "true").lower() == "true"
 OCR_LANG = os.getenv("AUTO_OCR_LANG", "chi_tra+eng")
-MOVE_SOURCE = os.getenv("AUTO_MOVE_SOURCE", "false").lower() == "true"  # 是否移動原始文件
-POLL_INTERVAL = int(os.getenv("AUTO_POLL_INTERVAL", "5"))  # 監控間隔（秒）
-MAX_RETRIES = int(os.getenv("AUTO_MAX_RETRIES", "3"))  # 最大重試次數
+MOVE_SOURCE = os.getenv("AUTO_MOVE_SOURCE", "false").lower() == "true"
+POLL_INTERVAL = int(os.getenv("AUTO_POLL_INTERVAL", "5"))
+MAX_RETRIES = int(os.getenv("AUTO_MAX_RETRIES", "3"))
+RETRY_BASE_DELAY = int(os.getenv("AUTO_RETRY_BASE_DELAY", "2"))
+RETRY_MAX_DELAY = int(os.getenv("AUTO_RETRY_MAX_DELAY", "60"))
+TEMP_DIR = os.getenv("AUTO_TEMP_DIR", "/app/temp")
 
-# 支援的文件擴展名
-SUPPORTED_EXTENSIONS = {
-    '.pdf', '.docx', '.doc', '.pptx', '.ppt',
-    '.xlsx', '.xls', '.html', '.htm', '.csv',
-    '.json', '.xml', '.zip', '.epub', '.msg',
-    '.jpg', '.jpeg', '.png', '.gif', '.webp',
-    '.mp3', '.wav', '.m4a', '.flac'
-}
+try:
+    from api.constants import SUPPORTED_EXTENSIONS
+except ImportError:
+    from constants import SUPPORTED_EXTENSIONS
 
 # 初始化 MarkItDown
 print(f"[{datetime.now().isoformat()}] 初始化 MarkItDown...")
@@ -98,6 +97,42 @@ def convert_file(file_path):
         return False
 
 
+def convert_file_with_retry(file_path, max_retries=MAX_RETRIES):
+    """轉換文件，指數退避重試"""
+    for attempt in range(max_retries):
+        try:
+            return convert_file(file_path)
+        except Exception as e:
+            if attempt < max_retries - 1:
+                wait_time = min(RETRY_BASE_DELAY * (2 ** attempt), RETRY_MAX_DELAY)
+                print(f"[{datetime.now().isoformat()}] ⚠️ 轉換失敗，{wait_time}秒後重試 ({attempt+1}/{max_retries}): {str(e)}")
+                time.sleep(wait_time)
+            else:
+                print(f"[{datetime.now().isoformat()}] ✗ 重試次數用盡：{str(e)}")
+                
+                # 移動到失敗目錄
+                failed_dir = Path(TEMP_DIR) / ".failed"
+                failed_dir.mkdir(parents=True, exist_ok=True)
+                
+                # 移動文件
+                shutil.move(str(file_path), str(failed_dir / file_path.name))
+                
+                # 寫入錯誤文件
+                import json
+                error_file = failed_dir / f"{file_path.name}.error"
+                with open(error_file, 'w', encoding='utf-8') as f:
+                    f.write(json.dumps({
+                        "timestamp": datetime.now().isoformat(),
+                        "error": str(e),
+                        "retries": max_retries,
+                        "file": str(file_path.name)
+                    }, indent=2, ensure_ascii=False))
+                
+                print(f"[{datetime.now().isoformat()}] ✗ 文件已移至失敗目錄：{file_path.name}")
+                return False
+    return False
+
+
 def main():
     """主循環"""
     # 確保目錄存在
@@ -109,9 +144,9 @@ def main():
     existing_files = get_supported_files(INPUT_DIR)
     
     if existing_files:
-        print(f"  找到 {len(existing_files)} 個文件")
+        print(f"  找到 {len(existing_files)}個文件")
         for file_path in existing_files:
-            convert_file(file_path)
+            convert_file_with_retry(file_path)
     else:
         print("  沒有現有文件")
     
@@ -130,10 +165,10 @@ def main():
             new_files = [f for f in current_files if str(f) not in processed_files]
             
             if new_files:
-                print(f"\n[{datetime.now().isoformat()}] 發現 {len(new_files)} 個新文件")
+                print(f"\n[{datetime.now().isoformat()}] 發現 {len(new_files)}個新文件")
                 
                 for file_path in new_files:
-                    success = convert_file(file_path)
+                    success = convert_file_with_retry(file_path)
                     
                     if success:
                         processed_files.add(str(file_path))

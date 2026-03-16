@@ -8,11 +8,20 @@ from datetime import datetime
 import io
 import subprocess
 
-# 從環境變數讀取配置
-API_DEBUG = os.getenv("API_DEBUG", "false").lower() == "true"
-DEFAULT_OCR_LANG = os.getenv("DEFAULT_OCR_LANG", "chi_tra+eng")
-ENABLE_PLUGINS_BY_DEFAULT = os.getenv("ENABLE_PLUGINS_BY_DEFAULT", "false").lower() == "true"
-MAX_UPLOAD_SIZE = int(os.getenv("MAX_UPLOAD_SIZE", "52428800"))  # 預設 50MB
+# Validate environment variables on startup
+from .config import validate_environment, ConfigurationError
+
+try:
+    _config = validate_environment()
+except ConfigurationError as e:
+    print(f"Configuration error: {e}")
+    raise SystemExit(1)
+
+# 從配置物件讀取配置
+API_DEBUG = _config.api.debug
+DEFAULT_OCR_LANG = _config.ocr.default_lang
+ENABLE_PLUGINS_BY_DEFAULT = _config.ocr.enabled_by_default
+MAX_UPLOAD_SIZE = _config.upload.max_size
 
 # OpenAI 配置（可選）
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -109,36 +118,106 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 支援的 OCR 語言代碼
-OCR_LANGUAGES = {
-    "chi_sim": "簡體中文",
-    "chi_tra": "繁體中文",
-    "eng": "英文",
-    "jpn": "日文",
-    "kor": "韓文",
-    "tha": "泰文",
-    "vie": "越南文",
+from .constants import OCR_LANGUAGES
+
+# Setup logging and add middleware
+from .middleware import RequestLoggingMiddleware, setup_logging
+logger = setup_logging()
+
+# Add request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
+# ===== Error Handling Configuration =====
+import json
+from fastapi.exceptions import RequestValidationError
+
+ERROR_LANG = os.getenv("ERROR_LANG", "zh-TW")
+
+ERROR_MESSAGES = {
+    "zh-TW": {
+        "internal_error": "伺服器內部錯誤，請稍後重試",
+        "not_found": "找不到資源",
+        "validation_error": "請求參數驗證失敗",
+        "timeout": "操作超時，請稍後重試",
+    },
+    "en": {
+        "internal_error": "Internal server error, please try again later",
+        "not_found": "Resource not found",
+        "validation_error": "Request validation failed",
+        "timeout": "Operation timed out, please try again later",
+    }
 }
 
-# 初始化 MarkItDown
+def get_error_message(key: str, accept_language: str = None) -> str:
+    """Get error message in preferred language."""
+    lang = accept_language if accept_language else ERROR_LANG
+    if lang not in ERROR_MESSAGES:
+        lang = "en"  # Fallback to English
+    return ERROR_MESSAGES.get(lang, {}).get(key, "Unknown error")
+
+# ===== Exception Handlers =====
+@app.exception_handler(Exception)
+async def generic_exception_handler(request, exc):
+    """Handle unhandled exceptions with language-aware messages."""
+    if API_DEBUG:
+        # Debug mode: show full error details
+        return Response(
+            content=json.dumps({
+                "detail": str(exc),
+                "type": type(exc).__name__,
+            }),
+            status_code=500,
+            media_type="application/json"
+        )
+    else:
+        # Production mode: hide internal details
+        accept_language = request.headers.get("Accept-Language", ERROR_LANG)
+        message = get_error_message("internal_error", accept_language)
+        
+        # Log full error internally
+        logger.error(f"Internal error: {exc}", exc_info=True)
+        
+        return Response(
+            content=json.dumps({"detail": message}),
+            status_code=500,
+            media_type="application/json"
+        )
+
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    """Return empty 404 response."""
+    return Response(status_code=404)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    """Handle validation errors with language-aware messages."""
+    accept_language = request.headers.get("Accept-Language", ERROR_LANG)
+    message = get_error_message("validation_error", accept_language)
+    
+    return Response(
+        content=json.dumps({
+            "detail": message,
+            "errors": exc.errors() if API_DEBUG else None
+        }),
+        status_code=400,
+        media_type="application/json"
+    )
+
+# Initialize MarkItDown
+from fastapi.responses import Response
+
 md = MarkItDown(enable_plugins=ENABLE_PLUGINS_BY_DEFAULT)
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root():
-    """API 健康檢查"""
-    return {
-        "status": "healthy",
-        "service": "MarkItDown API",
-        "version": "0.1.0",
-        "supported_formats": [
-            "PDF", "DOCX", "PPTX", "XLSX", "XLS",
-            "HTML", "Images", "Audio", "CSV", "JSON", "XML",
-            "ZIP", "EPub", "Outlook"
-        ],
-        "ocr_languages": list(OCR_LANGUAGES.keys()),
-        "default_ocr_lang": DEFAULT_OCR_LANG
-    }
+    """Return 404 for root path."""
+    return Response(status_code=404)
 
+# Mount system router
+from .system import api_router as system_router
+app.include_router(system_router)
+
+# Keep health endpoint
 @app.get("/health")
 async def health_check():
     """健康檢查端點"""
