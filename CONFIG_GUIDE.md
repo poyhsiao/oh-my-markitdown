@@ -14,7 +14,7 @@
 ### 步驟 1：複製配置範例
 
 ```bash
-cd /Users/kimhsiao/git/kimhsiao/markitdown-kim
+cd /Users/kimhsiao/git/kimhsiao/oh-my-markitdown
 cp .env.example .env
 ```
 

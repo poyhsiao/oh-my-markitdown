@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-LABEL maintainer="kimhsiao"
+LABEL maintainer="Kimhsiao <white.shopping@gmail.com>"
 LABEL description="MarkItDown Docker with API - Convert files to Markdown via HTTP API with multi-language OCR"
 
 # 設置工作目錄
@@ -75,7 +75,15 @@ RUN pip install --no-cache-dir \
     \
     # Faster-Whisper（本地 STT，比 Whisper 快 2-4 倍）
     faster-whisper \
-    psutil
+    psutil \
+    \
+    # Testing dependencies
+    pytest \
+    pytest-asyncio
+
+# Pre-download Whisper base model (per spec Section 2.3)
+# This ensures the model is available on first run without download delay
+RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
 
 # 創建目錄結構
 RUN mkdir -p /app/input /app/output /app/data /app/api
@@ -88,6 +96,11 @@ COPY api/whisper_transcribe.py /app/api/whisper_transcribe.py
 COPY api/constants.py /app/api/constants.py
 COPY api/middleware.py /app/api/middleware.py
 COPY api/system.py /app/api/system.py
+COPY api/response.py /app/api/response.py
+COPY api/concurrency.py /app/api/concurrency.py
+COPY api/subtitles.py /app/api/subtitles.py
+COPY api/ip_whitelist.py /app/api/ip_whitelist.py
+COPY api/youtube_grabber.py /app/api/youtube_grabber.py
 
 # 複製自動轉換腳本
 COPY api/auto_convert.py /app/api/auto_convert.py
@@ -97,6 +110,9 @@ COPY cli.py /app/cli.py
 
 # 複製腳本目錄
 COPY scripts /app/scripts
+
+# 複製測試目錄
+COPY tests /app/tests
 
 # 設置執行權限
 RUN chmod +x /app/cli.py

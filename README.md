@@ -98,8 +98,8 @@ Use `+` to combine multiple languages:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/kimhsiao/markitdown-kim.git
-cd markitdown-kim
+git clone https://github.com/poyhsiao/oh-my-markitdown.git
+cd oh-my-markitdown
 ```
 
 ### 2. Configure Environment Variables (Optional)
@@ -399,7 +399,7 @@ For issues, please check:
 
 ---
 
-**Created by:** kimhsiao  
+**Created by:** Kimhsiao  
 **Last Updated:** 2026-03-17  
 **Version:** 0.2.0  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  

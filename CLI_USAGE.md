@@ -15,7 +15,7 @@
 
 ```bash
 # 1. 進入專案目錄
-cd /Users/kimhsiao/git/kimhsiao/markitdown-kim
+cd /Users/kimhsiao/git/kimhsiao/oh-my-markitdown
 
 # 2. 確保 Docker 映像已建置
 docker compose build
