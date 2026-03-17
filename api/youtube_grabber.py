@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-YouTube 字幕抓取工具（使用 yt-dlp）
+YouTube Subtitle Grabber (using yt-dlp)
 
-功能：
-- 從 YouTube 影片抓取字幕
-- 支持多語言
-- 自動合併字幕為 Markdown 格式
-- 支持 yt-dlp 的所有功能
+Features:
+- Download subtitles from YouTube videos
+- Support multiple languages
+- Auto-merge subtitles into Markdown format
+- Support all yt-dlp features
 
-使用方式：
+Usage:
     python youtube_grabber.py --url "https://youtu.be/VIDEO_ID" --output output.md
     python youtube_grabber.py --url "URL" --lang zh-Hant,en --output output.md
 """
@@ -23,9 +23,9 @@ from datetime import datetime
 
 
 def get_video_info(url, verbose=False):
-    """獲取影片資訊（不包含字幕）"""
+    """Get video information (excluding subtitles)"""
     if verbose:
-        print(f"[{datetime.now().isoformat()}] 獲取影片資訊：{url}")
+        print(f"[{datetime.now().isoformat()}] Getting video info: {url}")
     
     cmd = [
         'yt-dlp',
@@ -38,16 +38,16 @@ def get_video_info(url, verbose=False):
     
     if result.returncode != 0:
         if verbose:
-            print(f"❌ 錯誤：{result.stderr}")
+            print(f"❌ Error: {result.stderr}")
         return None
     
     return json.loads(result.stdout)
 
 
 def list_available_subtitles(url, verbose=False):
-    """列出可用的字幕語言"""
+    """List available subtitle languages"""
     if verbose:
-        print(f"[{datetime.now().isoformat()}] 檢查可用字幕：{url}")
+        print(f"[{datetime.now().isoformat()}] Checking available subtitles: {url}")
     
     cmd = [
         'yt-dlp',
@@ -60,10 +60,10 @@ def list_available_subtitles(url, verbose=False):
     
     if result.returncode != 0:
         if verbose:
-            print(f"❌ 錯誤：{result.stderr}")
+            print(f"❌ Error: {result.stderr}")
         return []
     
-    # 解析輸出
+    # Parse output
     subtitles = []
     for line in result.stdout.split('\n'):
         if 'Available subtitles' in line or 'Automatic captions' in line:
@@ -76,85 +76,85 @@ def list_available_subtitles(url, verbose=False):
 
 def download_subtitles(url, output_path, languages=None, verbose=False):
     """
-    下載字幕並轉換為 Markdown
+    Download subtitles and convert to Markdown
     
-    參數：
+    Args:
         url: YouTube URL
-        output_path: 輸出文件路徑
-        languages: 語言列表（預設：['zh-Hant', 'zh-Hans', 'en']）
-        verbose: 詳細輸出
+        output_path: Output file path
+        languages: Language list (default: ['zh-Hant', 'zh-Hans', 'en'])
+        verbose: Verbose output
     """
     
     if languages is None:
         languages = ['zh-Hant', 'zh-Hans', 'en', 'zh-TW', 'zh-CN']
     
     if verbose:
-        print(f"[{datetime.now().isoformat()}] 開始下載字幕")
+        print(f"[{datetime.now().isoformat()}] Starting subtitle download")
         print(f"  URL: {url}")
-        print(f"  語言優先順序：{', '.join(languages)}")
-        print(f"  輸出：{output_path}")
+        print(f"  Language priority: {', '.join(languages)}")
+        print(f"  Output: {output_path}")
     
-    # 創建臨時目錄
+    # Create temp directory
     temp_dir = Path(output_path).parent / '.temp_subs'
     temp_dir.mkdir(exist_ok=True)
     
     try:
-        # 下載字幕
+        # Download subtitles
         cmd = [
             'yt-dlp',
-            '--write-auto-sub',  # 下載自動生成的字幕
+            '--write-auto-sub',  # Download auto-generated subtitles
             '--write-sub',
             '--sub-lang', ','.join(languages),
-            '--skip-download',  # 不下載視頻
-            '--sub-format', 'vtt',  # VTT 格式
-            '--convert-subs', 'vtt',  # 轉換字幕格式
+            '--skip-download',  # Don't download video
+            '--sub-format', 'vtt',  # VTT format
+            '--convert-subs', 'vtt',  # Convert subtitle format
             '-o', str(temp_dir / '%(title)s.%(ext)s'),
-            '--no-check-certificate',  # 跳過證書檢查
+            '--no-check-certificate',  # Skip certificate check
             url
         ]
         
         if verbose:
-            print(f"  執行：{' '.join(cmd)}")
+            print(f"  Executing: {' '.join(cmd)}")
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         
         if result.returncode != 0:
             if verbose:
-                print(f"❌ 下載失敗：{result.stderr}")
+                print(f"❌ Download failed: {result.stderr}")
             return False
         
-        # 查找下載的字幕文件
+        # Find downloaded subtitle files
         sub_files = list(temp_dir.glob('*.vtt'))
         
         if not sub_files:
             if verbose:
-                print("❌ 未找到字幕文件")
+                print("❌ No subtitle files found")
             return False
         
         if verbose:
-            print(f"✅ 找到 {len(sub_files)} 個字幕文件")
+            print(f"✅ Found {len(sub_files)} subtitle file(s)")
             for f in sub_files:
                 print(f"   - {f.name}")
         
-        # 轉換為 Markdown
+        # Convert to Markdown
         convert_subs_to_markdown(sub_files, output_path, verbose)
         
         return True
         
     finally:
-        # 清理臨時文件
+        # Clean up temp files
         import shutil
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
 
 
 def convert_vtt_to_text(vtt_content):
-    """將 VTT 字幕轉換為純文字"""
+    """Convert VTT subtitles to plain text"""
     lines = vtt_content.split('\n')
     text_lines = []
     
     for line in lines:
-        # 跳過 VTT 頭部和時間軸
+        # Skip VTT header and timestamps
         if line.startswith('WEBVTT'):
             continue
         if '-->' in line:
@@ -170,52 +170,52 @@ def convert_vtt_to_text(vtt_content):
 
 
 def convert_subs_to_markdown(sub_files, output_path, verbose=False):
-    """將 VTT 字幕文件轉換為 Markdown"""
+    """Convert VTT subtitle files to Markdown"""
     
     markdown_content = []
-    markdown_content.append("# YouTube 字幕\n")
+    markdown_content.append("# YouTube Subtitles\n")
     
     for sub_file in sorted(sub_files):
-        # 從文件名提取語言
+        # Extract language from filename
         lang = sub_file.stem.split('.')[-1] if '.' in sub_file.stem else 'unknown'
         
         with open(sub_file, 'r', encoding='utf-8') as f:
             vtt_content = f.read()
         
-        # 轉換為文字
+        # Convert to text
         text_content = convert_vtt_to_text(vtt_content)
         
-        # 添加到 Markdown
-        markdown_content.append(f"## 語言：{lang}\n")
+        # Add to Markdown
+        markdown_content.append(f"## Language: {lang}\n")
         markdown_content.append(text_content)
         markdown_content.append("\n---\n")
     
-    # 寫入文件
+    # Write to file
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(markdown_content))
     
     if verbose:
-        print(f"✅ 已寫入：{output_path}")
-        print(f"   總行數：{len(markdown_content)}")
+        print(f"✅ Written: {output_path}")
+        print(f"   Total lines: {len(markdown_content)}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='YouTube 字幕抓取工具（使用 yt-dlp）',
+        description='YouTube Subtitle Grabber (using yt-dlp)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用範例：
+Examples:
 
-  # 基本使用（自動選擇語言）
+  # Basic usage (auto-select language)
   python youtube_grabber.py --url "https://youtu.be/VIDEO_ID" --output output.md
   
-  # 指定語言
+  # Specify language
   python youtube_grabber.py --url "URL" --lang zh-Hant,en --output output.md
   
-  # 詳細輸出
+  # Verbose output
   python youtube_grabber.py --url "URL" --output output.md --verbose
   
-  # 列出可用字幕
+  # List available subtitles
   python youtube_grabber.py --url "URL" --list-subs
         """
     )
@@ -223,50 +223,50 @@ def main():
     parser.add_argument(
         '--url', '-u',
         required=True,
-        help='YouTube 影片 URL'
+        help='YouTube video URL'
     )
     
     parser.add_argument(
         '--output', '-o',
         required=True,
-        help='輸出 Markdown 文件路徑'
+        help='Output Markdown file path'
     )
     
     parser.add_argument(
         '--lang', '-l',
         default='zh-Hant,zh-Hans,en',
-        help='字幕語言（逗號分隔，預設：zh-Hant,zh-Hans,en）'
+        help='Subtitle languages (comma-separated, default: zh-Hant,zh-Hans,en)'
     )
     
     parser.add_argument(
         '--list-subs',
         action='store_true',
-        help='僅列出可用字幕，不下載'
+        help='Only list available subtitles, do not download'
     )
     
     parser.add_argument(
         '--verbose', '-v',
         action='store_true',
-        help='詳細輸出'
+        help='Verbose output'
     )
     
     args = parser.parse_args()
     
-    # 解析語言列表
+    # Parse language list
     languages = [lang.strip() for lang in args.lang.split(',')]
     
     if args.list_subs:
-        # 僅列出字幕
+        # Only list subtitles
         subs = list_available_subtitles(args.url, args.verbose)
         if subs:
-            print("可用字幕：")
+            print("Available subtitles:")
             for sub in subs:
                 print(f"  - {sub}")
         else:
-            print("❌ 未找到可用字幕或發生錯誤")
+            print("❌ No available subtitles found or error occurred")
             sys.exit(1)
     else:
-        # 下載字幕
+        # Download subtitles
         success = download_subtitles(
             args.url,
             args.output,
@@ -275,16 +275,16 @@ def main():
         )
         
         if success:
-            print(f"\n✅ 字幕下載成功！")
-            print(f"   輸出文件：{args.output}")
+            print(f"\n✅ Subtitle download successful!")
+            print(f"   Output file: {args.output}")
             
-            # 顯示統計
+            # Show statistics
             with open(args.output, 'r', encoding='utf-8') as f:
                 content = f.read()
-            print(f"   字元數：{len(content)}")
-            print(f"   行數：{content.count(chr(10)) + 1}")
+            print(f"   Character count: {len(content)}")
+            print(f"   Line count: {content.count(chr(10)) + 1}")
         else:
-            print("\n❌ 字幕下載失敗")
+            print("\n❌ Subtitle download failed")
             sys.exit(1)
 
 

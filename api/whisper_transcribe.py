@@ -1,6 +1,6 @@
 """
-Whisper 轉錄模組
-使用 Faster-Whisper 進行本地語音轉文字
+Whisper Transcription Module
+Use Faster-Whisper for local speech-to-text
 """
 
 import os
@@ -10,13 +10,14 @@ from typing import Optional, Tuple, Dict, List
 from faster_whisper import WhisperModel
 
 from .constants import WHISPER_MODEL_CACHE_SIZE
+from .subtitles import format_multiline_output, format_transcript_with_timestamps
 
-# 從環境變數讀取配置
+# Read configuration from environment variables
 DEFAULT_MODEL = os.getenv("WHISPER_MODEL", "base")
 DEFAULT_DEVICE = os.getenv("WHISPER_DEVICE", "cpu")
 DEFAULT_COMPUTE_TYPE = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 
-# 全局模型快取（避免重複載入）
+# Global model cache (avoid repeated loading)
 class ModelCache:
     """LRU model cache with size limit."""
     
@@ -88,17 +89,17 @@ def get_model(
     compute_type: str = None
 ):
     """
-    獲取或載入 Whisper 模型
+    Get or load Whisper model
     
     Args:
-        model_size: 模型大小 (tiny, base, small, medium, large)
-        device: 運行設備 (cpu, cuda)
-        compute_type: 計算類型 (int8, float16, float32)
+        model_size: Model size (tiny, base, small, medium, large)
+        device: Device to run on (cpu, cuda)
+        compute_type: Compute type (int8, float16, float32)
     
     Returns:
-        WhisperModel 實例
+        WhisperModel instance
     """
-    # 使用環境變數或默認值
+    # Use environment variables or defaults
     model_size = model_size or DEFAULT_MODEL
     device = device or DEFAULT_DEVICE
     compute_type = compute_type or DEFAULT_COMPUTE_TYPE
@@ -107,7 +108,7 @@ def get_model(
     
     model = _model_cache.get(cache_key)
     if model is None:
-        print(f"[Whisper] 載入模型: {model_size} (device={device}, compute_type={compute_type})")
+        print(f"[Whisper] Loading model: {model_size} (device={device}, compute_type={compute_type})")
         model = WhisperModel(
             model_size,
             device=device,
@@ -120,46 +121,49 @@ def get_model(
 
 def transcribe_audio(
     audio_path: str,
-    language: str = "zh",
+    language: str = "auto",
     model_size: str = "base",
     device: str = "cpu",
     compute_type: str = "int8",
     word_timestamps: bool = False
 ) -> Tuple[str, dict]:
     """
-    轉錄音訊檔案
+    Transcribe audio file
     
     Args:
-        audio_path: 音訊檔案路徑
-        language: 語言代碼 (zh, en, ja, ko 等)
-        model_size: 模型大小
-        device: 運行設備
-        compute_type: 計算類型
-        word_timestamps: 是否返回詞級時間戳
+        audio_path: Audio file path
+        language: Language code (auto=auto-detect, zh, en, ja, ko, etc.)
+        model_size: Model size
+        device: Device to run on
+        compute_type: Compute type
+        word_timestamps: Whether to return word-level timestamps
     
     Returns:
-        (轉錄文字, 元數據)
+        (transcript text, metadata)
     """
-    # 載入模型
+    # Handle "auto" for auto-detection (Whisper expects None for auto-detect)
+    actual_language = None if language == "auto" else language
+    
+    # Load model
     model = get_model(model_size, device, compute_type)
     
-    # 轉錄
+    # Transcribe
     segments, info = model.transcribe(
         audio_path,
-        language=language,
+        language=actual_language,
         word_timestamps=word_timestamps,
-        vad_filter=True,  # 使用 VAD 過濾靜音
+        vad_filter=True,  # Use VAD to filter silence
         vad_parameters=dict(min_silence_duration_ms=500)
     )
     
-    # 組合文字
+    # Combine text
     transcript_lines = []
     for segment in segments:
         transcript_lines.append(segment.text)
     
     transcript = " ".join(transcript_lines)
     
-    # 元數據
+    # Metadata
     metadata = {
         "language": info.language,
         "language_probability": info.language_probability,
@@ -174,19 +178,19 @@ def transcribe_audio(
 
 def transcribe_with_timestamps(
     audio_path: str,
-    language: str = "zh",
+    language: Optional[str] = None,
     model_size: str = "base"
 ) -> Tuple[str, list]:
     """
-    轉錄音訊並返回時間戳
+    Transcribe audio and return timestamps
     
     Args:
-        audio_path: 音訊檔案路徑
-        language: 語言代碼
-        model_size: 模型大小
+        audio_path: Audio file path
+        language: Language code (None=auto-detect)
+        model_size: Model size
     
     Returns:
-        (轉錄文字, 段落列表)
+        (transcript text, segments list)
     """
     model = get_model(model_size)
     
@@ -212,16 +216,16 @@ def transcribe_with_timestamps(
 
 def download_youtube_audio(url: str, output_dir: str = "/tmp") -> Tuple[str, str]:
     """
-    下載 YouTube 影片的音訊
+    Download audio from YouTube video
     
     Args:
         url: YouTube URL
-        output_dir: 輸出目錄
+        output_dir: Output directory
     
     Returns:
-        (音訊檔案路徑, 影片標題)
+        (audio file path, video title)
     """
-    # 獲取影片資訊
+    # Get video info
     result = subprocess.run(
         ["yt-dlp", "--print", "%(title)s|||%(id)s", url],
         capture_output=True,
@@ -230,13 +234,13 @@ def download_youtube_audio(url: str, output_dir: str = "/tmp") -> Tuple[str, str
     )
     
     if result.returncode != 0:
-        raise Exception(f"獲取 YouTube 資訊失敗: {result.stderr}")
+        raise Exception(f"Failed to get YouTube info: {result.stderr}")
     
     parts = result.stdout.strip().split("|||")
     title = parts[0] if len(parts) > 0 else "Unknown"
     video_id = parts[1] if len(parts) > 1 else "unknown"
     
-    # 下載音訊
+    # Download audio
     output_path = os.path.join(output_dir, f"{video_id}.mp3")
     
     result = subprocess.run(
@@ -247,7 +251,7 @@ def download_youtube_audio(url: str, output_dir: str = "/tmp") -> Tuple[str, str
     )
     
     if result.returncode != 0:
-        raise Exception(f"下載 YouTube 音訊失敗: {result.stderr}")
+        raise Exception(f"Failed to download YouTube audio: {result.stderr}")
     
     return output_path, title
 
@@ -259,22 +263,22 @@ def transcribe_youtube_video(
     output_dir: str = "/tmp"
 ) -> dict:
     """
-    下載 YouTube 影片並轉錄
+    Download YouTube video and transcribe
     
     Args:
         url: YouTube URL
-        language: 語言代碼
-        model_size: 模型大小
-        output_dir: 臨時檔案目錄
+        language: Language code
+        model_size: Model size
+        output_dir: Temporary file directory
     
     Returns:
-        包含轉錄結果和元數據的字典
+        Dictionary containing transcript results and metadata
     """
-    # 下載音訊
+# Download audio
     audio_path, title = download_youtube_audio(url, output_dir)
     
     try:
-        # 轉錄
+        # Transcribe
         transcript, metadata = transcribe_audio(
             audio_path,
             language=language,
@@ -288,9 +292,9 @@ def transcribe_youtube_video(
             "metadata": metadata,
             "audio_path": audio_path
         }
-    
+        
     except Exception as e:
-        # 清理臨時檔案
+        # Clean up temporary files
         if os.path.exists(audio_path):
             os.unlink(audio_path)
         raise e
@@ -303,38 +307,135 @@ def format_transcript_as_markdown(
     include_metadata: bool = True
 ) -> str:
     """
-    將轉錄結果格式化為 Markdown
+    Format transcript results as Markdown
     
     Args:
-        title: 影片標題
-        transcript: 轉錄文字
-        metadata: 元數據
-        include_metadata: 是否包含元數據
+        title: Video title
+        transcript: Transcript text
+        metadata: Metadata
+        include_metadata: Whether to include metadata
     
     Returns:
-        Markdown 格式的字串
+        Markdown formatted string
     """
     md_lines = [f"# {title}", ""]
     
     if include_metadata:
         md_lines.extend([
-            "## 轉錄資訊",
+            "## Transcription Info",
             "",
-            f"- **語言**: {metadata.get('language', 'unknown')}",
-            f"- **時長**: {metadata.get('duration', 0):.1f} 秒",
-            f"- **模型**: {metadata.get('model', 'unknown')}",
+            f"- **Language**: {metadata.get('language', 'unknown')}",
+            f"- **Duration**: {metadata.get('duration', 0):.1f} seconds",
+            f"- **Model**: {metadata.get('model', 'unknown')}",
             "",
             "---",
             ""
         ])
     
     md_lines.extend([
-        "## 轉錄內容",
+        "## Transcript",
         "",
         transcript
     ])
     
     return "\n".join(md_lines)
+
+
+def transcribe_with_formats(
+    audio_path: str,
+    language: str = "auto",
+    model_size: str = "base",
+    output_formats: str = "markdown",
+    include_timestamps: bool = False
+) -> Tuple[Dict[str, str], dict]:
+    """
+    Transcribe audio and return multiple format outputs
+    
+    Args:
+        audio_path: Audio file path
+        language: Language code (auto=auto-detect)
+        model_size: Model size
+        output_formats: Output formats (comma-separated, e.g., markdown,srt,vtt)
+        include_timestamps: Whether to include timestamps in Markdown
+    
+    Returns:
+        (format dict, metadata)
+    """
+    # Handle "auto" for auto-detection (Whisper expects None for auto-detect)
+    actual_language = None if language == "auto" else language
+    
+    # Get segments with timestamps
+    _, segments_list = transcribe_with_timestamps(
+        audio_path,
+        language=actual_language,
+        model_size=model_size
+    )
+    
+    # Use subtitles module to generate multiple formats
+    formats_dict = format_multiline_output(
+        segments_list,
+        output_format=output_formats
+    )
+    
+    # If timestamps needed, regenerate Markdown
+    if include_timestamps and "markdown" in formats_dict:
+        formats_dict["markdown"] = format_transcript_with_timestamps(
+            segments_list,
+            include_timestamps=True
+        )
+    
+    # Metadata
+    metadata = {
+        "language": language,
+        "model": model_size,
+        "segments_count": len(segments_list),
+        "formats": list(formats_dict.keys())
+    }
+    
+    return formats_dict, metadata
+
+
+def extract_audio_from_video(
+    video_path: str,
+    output_audio_path: Optional[str] = None
+) -> str:
+    """
+    Extract audio from video file
+    
+    Args:
+        video_path: Video file path
+        output_audio_path: Output audio file path (optional)
+    
+    Returns:
+        Extracted audio file path
+    """
+    if output_audio_path is None:
+        # Auto-generate output path
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_audio_path = os.path.join(
+            tempfile.gettempdir(),
+            f"{base_name}.mp3"
+        )
+    
+    # Use ffmpeg to extract audio
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-i", video_path,
+            "-vn",  # No video
+            "-acodec", "libmp3lame",  # Use MP3 codec
+            "-y",  # Overwrite output file
+            output_audio_path
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300  # 5 minutes timeout
+    )
+    
+    if result.returncode != 0:
+        raise Exception(f"Failed to extract audio from video: {result.stderr}")
+    
+    return output_audio_path
 
 
 from .constants import SUPPORTED_LANGUAGES
