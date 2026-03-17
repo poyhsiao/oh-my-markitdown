@@ -12,7 +12,11 @@ from typing import Optional, List
 from datetime import datetime
 import json
 
-api_router = APIRouter(prefix="/api/v1/system")
+from .concurrency import get_concurrency_manager
+from .config import get_config
+from .response import success_response
+
+api_router = APIRouter(prefix="/api/v1/admin")
 
 # Configuration from environment
 API_KEY = os.getenv("API_KEY", "")
@@ -149,19 +153,35 @@ async def cleanup_temp_files(
     
     Request body:
     {
-        "types": ["youtube", "ocr", "uploads", "models", "failed", "all"]
+        "targets": ["temp", "whisper", "all"],
+        "dry_run": false
     }
     
-    Default: all types
+    Default: all targets, dry_run=true
+    
+    Target values:
+    - temp: Clean temporary files (youtube audio, OCR temp, uploads, failed)
+    - whisper: Clear Whisper model cache
+    - all: Clean both temp and whisper
     """
     verify_api_key(x_api_key)
     
-    types = request_body.get("types", ["all"])
-    if "all" in types:
-        types = ["youtube", "ocr", "uploads", "models", "failed"]
+    targets = request_body.get("targets", ["all"])
+    dry_run = request_body.get("dry_run", True)
+    
+    # Map spec targets to internal types
+    types_to_clean = []
+    if "all" in targets:
+        types_to_clean = ["youtube", "ocr", "uploads", "models", "failed"]
+    else:
+        if "temp" in targets:
+            types_to_clean.extend(["youtube", "ocr", "uploads", "failed"])
+        if "whisper" in targets:
+            types_to_clean.append("models")
     
     result = {
         "success": True,
+        "dry_run": dry_run,
         "cleaned": {},
         "total_freed_bytes": 0,
         "total_freed_mb": 0
@@ -170,14 +190,15 @@ async def cleanup_temp_files(
     total_freed = 0
     
     # Clean youtube audio
-    if "youtube" in types:
+    if "youtube" in types_to_clean:
         freed = 0
         count = 0
         try:
             for f in Path(TEMP_DIR).glob("*.mp3"):
                 if f.is_file():
                     freed += f.stat().st_size
-                    f.unlink()
+                    if not dry_run:
+                        f.unlink()
                     count += 1
         except Exception as e:
             pass
@@ -189,14 +210,15 @@ async def cleanup_temp_files(
         total_freed += freed
     
     # Clean OCR temp images
-    if "ocr" in types:
+    if "ocr" in types_to_clean:
         freed = 0
         count = 0
         try:
             for f in Path(TEMP_DIR).glob("page_*.png"):
                 if f.is_file():
                     freed += f.stat().st_size
-                    f.unlink()
+                    if not dry_run:
+                        f.unlink()
                     count += 1
         except:
             pass
@@ -208,14 +230,15 @@ async def cleanup_temp_files(
         total_freed += freed
     
     # Clean upload temp files
-    if "uploads" in types:
+    if "uploads" in types_to_clean:
         freed = 0
         count = 0
         try:
             for f in Path(TEMP_DIR).glob("temp_*"):
                 if f.is_file():
                     freed += f.stat().st_size
-                    f.unlink()
+                    if not dry_run:
+                        f.unlink()
                     count += 1
         except:
             pass
@@ -227,7 +250,7 @@ async def cleanup_temp_files(
         total_freed += freed
     
     # Clean failed files
-    if "failed" in types:
+    if "failed" in types_to_clean:
         freed = 0
         count = 0
         try:
@@ -236,7 +259,8 @@ async def cleanup_temp_files(
                 for f in failed_dir.iterdir():
                     if f.is_file():
                         freed += f.stat().st_size
-                        f.unlink()
+                        if not dry_run:
+                            f.unlink()
                         count += 1
         except:
             pass
@@ -247,8 +271,8 @@ async def cleanup_temp_files(
         }
         total_freed += freed
     
-    # Clear model cache
-    if "models" in types:
+    # Clear model cache (only if not dry_run)
+    if "models" in types_to_clean and not dry_run:
         try:
             from .whisper_transcribe import clear_model_cache
             freed_mb = clear_model_cache()
@@ -257,6 +281,17 @@ async def cleanup_temp_files(
                 "freed_memory_mb": freed_mb
             }
             total_freed += freed_mb * 1024 * 1024
+        except:
+            pass
+    elif "models" in types_to_clean and dry_run:
+        # In dry_run mode, just report what would be freed
+        try:
+            from .whisper_transcribe import get_model_cache_info
+            cache_info = get_model_cache_info()
+            result["cleaned"]["models"] = {
+                "would_clear": cache_info.get("total_mb", 0),
+                "note": "dry_run: models not actually cleared"
+            }
         except:
             pass
     
@@ -388,3 +423,77 @@ async def get_cache_config(
     return {
         "max_size": WHISPER_MODEL_CACHE_SIZE
     }
+
+
+# ===== Queue Status Endpoint =====
+@api_router.get("/queue")
+async def get_queue_status(
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Query current queue status.
+    
+    Returns:
+        - current_processing: Number of requests currently being processed
+        - max_concurrent: Maximum concurrent requests allowed
+        - queue_length: Number of requests waiting in queue
+        - queue: List of queued/processing requests with details
+    """
+    verify_api_key(x_api_key)
+    
+    manager = get_concurrency_manager()
+    queue_status = manager.get_queue_status()
+    
+    return success_response(data=queue_status)
+
+
+# ===== Full Configuration Endpoint =====
+@api_router.get("/config")
+async def get_full_config(
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    Query current full configuration.
+    
+    Returns configuration for:
+        - api: API server settings
+        - ocr: OCR configuration
+        - whisper: Whisper transcription settings
+        - cleanup: Cleanup configuration
+        - admin: Admin endpoint settings
+    """
+    verify_api_key(x_api_key)
+    
+    config = get_config()
+    
+    # Build response according to spec
+    data = {
+        "api": {
+            "version": "1.0.0",
+            "port": config.api.port,
+            "debug": config.api.debug,
+            "max_upload_size_mb": config.upload.max_size // (1024 * 1024),
+            "upload_timeout_minutes": config.upload.timeout // 60,
+            "max_concurrent_requests": config.concurrency.max_requests
+        },
+        "ocr": {
+            "enabled": config.ocr.enabled_by_default,
+            "default_language": config.ocr.default_lang,
+            "openai_enabled": bool(os.getenv("OPENAI_API_KEY", ""))
+        },
+        "whisper": {
+            "model": config.whisper.model,
+            "device": config.whisper.device,
+            "compute_type": config.whisper.compute_type
+        },
+        "cleanup": {
+            "temp_threshold_hours": int(os.getenv("CLEANUP_TEMP_THRESHOLD_HOURS", "1")),
+            "auto_cleanup_enabled": os.getenv("AUTO_CLEANUP_ENABLED", "false").lower() == "true"
+        },
+        "admin": {
+            "ip_restriction_enabled": os.getenv("IP_WHITELIST_ENABLED", "false").lower() == "true",
+            "allowed_ips": os.getenv("IP_WHITELIST", "").split(",") if os.getenv("IP_WHITELIST") else []
+        }
+    }
+    
+    return success_response(data=data)

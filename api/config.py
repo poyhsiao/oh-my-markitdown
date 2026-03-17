@@ -109,13 +109,67 @@ class WhisperConfig:
 class ConcurrencyConfig:
     """Concurrency control configuration."""
     max_requests: int = 3
-    queue_timeout: int = 600  # 10 minutes
+    queue_timeout: int = 600
     
     def __post_init__(self):
         if self.max_requests < 1:
             raise ConfigurationError(f"CONCURRENT_MAX_REQUESTS must be at least 1, got {self.max_requests}")
         if self.queue_timeout <= 0:
             raise ConfigurationError(f"CONCURRENT_QUEUE_TIMEOUT must be positive, got {self.queue_timeout}")
+
+
+@dataclass
+class AdminConfig:
+    """Admin endpoint configuration."""
+    ip_restriction_enabled: bool = False
+    allowed_ips: List[str] = field(default_factory=list)
+    
+    def __post_init__(self):
+        if self.ip_restriction_enabled and not self.allowed_ips:
+            pass
+
+
+@dataclass
+class CleanupConfig:
+    """Cleanup configuration."""
+    temp_threshold_hours: int = 1
+    auto_enabled: bool = False
+    
+    def __post_init__(self):
+        if self.temp_threshold_hours < 0:
+            raise ConfigurationError(f"CLEANUP_TEMP_THRESHOLD_HOURS must be non-negative, got {self.temp_threshold_hours}")
+
+
+@dataclass
+class LogConfig:
+    """Logging configuration."""
+    level: str = "INFO"
+    format: str = "json"
+    
+    def __post_init__(self):
+        valid_levels = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        if self.level.upper() not in valid_levels:
+            raise ConfigurationError(f"LOG_LEVEL must be one of {valid_levels}, got {self.level}")
+        if self.format not in ("text", "json"):
+            raise ConfigurationError(f"LOG_FORMAT must be text or json, got {self.format}")
+
+
+@dataclass
+class VisionOCRConfig:
+    """OpenAI Vision OCR configuration (optional)."""
+    enabled: bool = False
+    api_key: str = ""
+    model: str = "gpt-4o"
+
+
+@dataclass
+class AutoConvertConfig:
+    """Auto-convert service configuration."""
+    input_dir: str = "/app/input"
+    output_dir: str = "/app/output"
+    enable_ocr: bool = True
+    ocr_lang: str = "chi_tra+eng"
+    poll_interval: int = 5
 
 
 @dataclass
@@ -126,6 +180,11 @@ class Config:
     ocr: OCRConfig = field(default_factory=OCRConfig)
     whisper: WhisperConfig = field(default_factory=WhisperConfig)
     concurrency: ConcurrencyConfig = field(default_factory=ConcurrencyConfig)
+    admin: AdminConfig = field(default_factory=AdminConfig)
+    cleanup: CleanupConfig = field(default_factory=CleanupConfig)
+    log: LogConfig = field(default_factory=LogConfig)
+    vision_ocr: VisionOCRConfig = field(default_factory=VisionOCRConfig)
+    auto_convert: AutoConvertConfig = field(default_factory=AutoConvertConfig)
 
 
 def load_config_from_env() -> Config:
@@ -139,14 +198,14 @@ def load_config_from_env() -> Config:
             workers=int(os.getenv("API_WORKERS", "1")),
         ),
         upload=UploadConfig(
-            max_size=int(os.getenv("MAX_UPLOAD_SIZE", "52428800")),
+            max_size=int(os.getenv("UPLOAD_MAX_SIZE", os.getenv("MAX_UPLOAD_SIZE", "52428800"))),
             timeout=int(os.getenv("UPLOAD_TIMEOUT", "1800")),
             chunk_size=int(os.getenv("UPLOAD_CHUNK_SIZE", "1048576")),
             buffer_size=int(os.getenv("UPLOAD_BUFFER_SIZE", "10485760")),
         ),
         ocr=OCRConfig(
-            default_lang=os.getenv("DEFAULT_OCR_LANG", "chi_tra+eng"),
-            enabled_by_default=os.getenv("ENABLE_PLUGINS_BY_DEFAULT", "false").lower() == "true",
+            default_lang=os.getenv("OCR_DEFAULT_LANG", os.getenv("DEFAULT_OCR_LANG", "chi_tra+eng")),
+            enabled_by_default=os.getenv("OCR_ENABLED_DEFAULT", os.getenv("ENABLE_PLUGINS_BY_DEFAULT", "false")).lower() == "true",
         ),
         whisper=WhisperConfig(
             model=os.getenv("WHISPER_MODEL", "base"),
@@ -157,6 +216,30 @@ def load_config_from_env() -> Config:
         concurrency=ConcurrencyConfig(
             max_requests=int(os.getenv("CONCURRENT_MAX_REQUESTS", "3")),
             queue_timeout=int(os.getenv("CONCURRENT_QUEUE_TIMEOUT", "600")),
+        ),
+        admin=AdminConfig(
+            ip_restriction_enabled=os.getenv("ADMIN_IP_RESTRICTION_ENABLED", "false").lower() == "true",
+            allowed_ips=[ip.strip() for ip in os.getenv("ADMIN_ALLOWED_IPS", "").split(",") if ip.strip()],
+        ),
+        cleanup=CleanupConfig(
+            temp_threshold_hours=int(os.getenv("CLEANUP_TEMP_THRESHOLD_HOURS", "1")),
+            auto_enabled=os.getenv("CLEANUP_AUTO_ENABLED", "false").lower() == "true",
+        ),
+        log=LogConfig(
+            level=os.getenv("LOG_LEVEL", "INFO"),
+            format=os.getenv("LOG_FORMAT", "json"),
+        ),
+        vision_ocr=VisionOCRConfig(
+            enabled=os.getenv("VISION_OCR_ENABLED", "false").lower() == "true",
+            api_key=os.getenv("VISION_OCR_API_KEY", os.getenv("OPENAI_API_KEY", "")),
+            model=os.getenv("VISION_OCR_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o")),
+        ),
+        auto_convert=AutoConvertConfig(
+            input_dir=os.getenv("AUTO_INPUT_DIR", "/app/input"),
+            output_dir=os.getenv("AUTO_OUTPUT_DIR", "/app/output"),
+            enable_ocr=os.getenv("AUTO_ENABLE_OCR", "true").lower() == "true",
+            ocr_lang=os.getenv("AUTO_OCR_LANG", "chi_tra+eng"),
+            poll_interval=int(os.getenv("AUTO_POLL_INTERVAL", "5")),
         ),
     )
 

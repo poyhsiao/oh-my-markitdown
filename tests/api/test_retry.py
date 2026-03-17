@@ -76,14 +76,15 @@ class TestRetryLogic:
             with patch('api.auto_convert.time.sleep'):
                 with patch('api.auto_convert.shutil.move'):
                     with patch('api.auto_convert.Path.mkdir'):
-                        mock_convert.side_effect = Exception("Persistent failure")
-                        
-                        from api.auto_convert import convert_file_with_retry
-                        
-                        result = convert_file_with_retry("test.pdf", max_retries=3)
-                        
-                        assert result is False
-                        assert mock_convert.call_count == 3
+                        with patch('builtins.open', create=True):
+                            mock_convert.side_effect = Exception("Persistent failure")
+                            
+                            from api.auto_convert import convert_file_with_retry
+                            
+                            result = convert_file_with_retry("test.pdf", max_retries=3)
+                            
+                            assert result is False
+                            assert mock_convert.call_count == 3
 
     def test_retry_delay_increases(self):
         """Test that retry delays increase exponentially."""
@@ -116,14 +117,17 @@ class TestRetryLogic:
         """Test custom max_retries parameter."""
         with patch('api.auto_convert.convert_file') as mock_convert:
             with patch('api.auto_convert.time.sleep'):
-                mock_convert.side_effect = Exception("Always fails")
-                
-                from api.auto_convert import convert_file_with_retry
-                
-                result = convert_file_with_retry("test.pdf", max_retries=5)
-                
-                assert result is False
-                assert mock_convert.call_count == 5
+                with patch('api.auto_convert.shutil.move'):
+                    with patch('api.auto_convert.Path.mkdir'):
+                        with patch('builtins.open', create=True):
+                            mock_convert.side_effect = Exception("Always fails")
+                            
+                            from api.auto_convert import convert_file_with_retry
+                            
+                            result = convert_file_with_retry("test.pdf", max_retries=5)
+                            
+                            assert result is False
+                            assert mock_convert.call_count == 5
 
 
 class TestRetryConfiguration:

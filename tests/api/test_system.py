@@ -42,9 +42,9 @@ class TestCleanupEndpoint:
         from api.constants import CLEANUP_TYPES
         
         # Should map to display names
-        assert CLEANUP_TYPES['youtube'] == 'YouTube Audio'
-        assert CLEANUP_TYPES['ocr'] == 'OCR Temp'
-        assert CLEANUP_TYPES['uploads'] == 'Upload Temp'
+        assert CLEANUP_TYPES['youtube'] == 'YouTube audio files'
+        assert CLEANUP_TYPES['ocr'] == 'OCR temporary images'
+        assert CLEANUP_TYPES['uploads'] == 'Upload temporary files'
 
 
 class TestConfigEndpoints:
@@ -96,21 +96,20 @@ class TestAPIKeyAuth:
 
     def test_api_key_validation(self):
         """Test API key validation."""
-        import os
         from unittest.mock import patch
+        from api import system
+        from fastapi import HTTPException
         
-        with patch.dict(os.environ, {'API_KEY': 'test_key'}):
-            from api.system import verify_api_key
-            from fastapi import HTTPException
-            
+        # Patch API_KEY at module level
+        with patch.object(system, 'API_KEY', 'test_key'):
             # Wrong key should raise
             with pytest.raises(HTTPException) as exc_info:
-                verify_api_key("wrong_key")
+                system.verify_api_key("wrong_key")
             assert exc_info.value.status_code == 401
             
             # Correct key should pass
             try:
-                verify_api_key("test_key")
+                system.verify_api_key("test_key")
             except HTTPException:
                 pytest.fail("Should not raise with correct key")
 
