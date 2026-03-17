@@ -109,7 +109,7 @@ def download_and_convert_subtitles(
 | 優化 | 做法 | 效果 |
 |------|------|------|
 | 降低音訊品質 | 下載 64kbps | 下載快 50% |
-| 多線程 | `num_workers=4` | CPU 多核並行 |
+| 多線程 | `cpu_threads=8` (fast_mode) | CPU 多核並行 |
 | VAD 優化 | `min_silence_duration_ms=500` | 跳過靜音 |
 
 **預設保持**:

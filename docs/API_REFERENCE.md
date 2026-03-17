@@ -133,7 +133,11 @@ curl -X POST "http://localhost:51083/api/v1/convert/url?url=https://example.com/
 
 ### POST /api/v1/convert/youtube
 
-Transcribe YouTube videos using Faster-Whisper (local processing, no API limits).
+Transcribe YouTube videos using hybrid strategy for optimal speed.
+
+**Hybrid Strategy:**
+- **Fast Path:** Uses YouTube subtitles if available (2-5 seconds)
+- **Slow Path:** Falls back to Faster-Whisper (30-60 minutes for 1hr video)
 
 #### Request
 
@@ -144,6 +148,8 @@ Transcribe YouTube videos using Faster-Whisper (local processing, no API limits)
 | `model_size` | String | No | `base` | Model size: tiny, base, small, medium, large |
 | `return_format` | String | No | `markdown` | Response format |
 | `include_metadata` | Boolean | No | `true` | Include video metadata |
+| `prefer_subtitles` | Boolean | No | `true` | Prefer YouTube subtitles if available (faster) |
+| `fast_mode` | Boolean | No | `false` | Enable fast mode optimizations for Whisper |
 
 #### Model Sizes
 
@@ -159,9 +165,21 @@ Transcribe YouTube videos using Faster-Whisper (local processing, no API limits)
 
 #### Examples
 
-**Chinese transcription:**
+**Chinese transcription (auto-detect subtitles):**
 ```bash
 curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh" \
+  -o transcript.md
+```
+
+**Force Whisper transcription (skip subtitle check):**
+```bash
+curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&prefer_subtitles=false" \
+  -o transcript.md
+```
+
+**Fast mode for quicker Whisper transcription:**
+```bash
+curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&prefer_subtitles=false&fast_mode=true" \
   -o transcript.md
 ```
 
@@ -170,6 +188,32 @@ curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.yout
 curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=en&return_format=json" \
   -o response.json
 ```
+
+#### Response Metadata
+
+The response includes metadata with transcription source information:
+
+```json
+{
+  "success": true,
+  "title": "Video Title",
+  "transcript": "...",
+  "metadata": {
+    "source": "youtube_subtitles",
+    "language": "zh-Hant",
+    "is_auto_generated": false,
+    "duration": 1800,
+    "processing_time_ms": 2500
+  }
+}
+```
+
+**Metadata Fields:**
+- `source`: `"youtube_subtitles"` or `"whisper"`
+- `language`: Language code used
+- `is_auto_generated`: Whether subtitles are auto-generated (for subtitle source)
+- `duration`: Video duration in seconds
+- `processing_time_ms`: Processing time in milliseconds
 
 ---
 
@@ -297,7 +341,7 @@ curl http://localhost:51083/api/v1/config
 ```json
 {
   "api": {
-    "version": "1.1.0",
+    "version": "0.3.0",
     "debug": false,
     "max_upload_size": 52428800,
     "max_upload_size_mb": 50

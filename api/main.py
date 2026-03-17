@@ -112,7 +112,7 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.2.0",
+    version="0.3.0",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -511,16 +511,31 @@ async def transcribe_youtube(
     model_size: str = Query("base", description="Model size (tiny, base, small, medium, large)"),
     return_format: str = Query("markdown", description="Response format: markdown or json"),
     include_timestamps: bool = Query(False, description="Include timestamps"),
-    include_metadata: bool = Query(True, description="Include metadata")
+    include_metadata: bool = Query(True, description="Include metadata"),
+    prefer_subtitles: bool = Query(True, description="Prefer YouTube subtitles if available (faster)"),
+    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)")
 ):
     """
     Download YouTube video audio and transcribe using Whisper.
     
+    Uses hybrid strategy for speed optimization:
+    - **Fast path**: Uses YouTube subtitles if available (2-5 seconds)
+    - **Slow path**: Uses Whisper transcription (30-60 minutes for 1hr video)
+    
+    **Parameters:**
     - **url**: YouTube video URL
     - **language**: Language code (zh=Chinese, en=English, ja=Japanese, ko=Korean)
     - **model_size**: Model size (tiny fastest, large most accurate)
-    - **return_format**: Response format
+    - **return_format**: Response format (markdown or json)
+    - **include_timestamps**: Include timestamps in transcript
     - **include_metadata**: Include transcription metadata
+    - **prefer_subtitles**: Prefer YouTube subtitles if available (faster, default: true)
+    - **fast_mode**: Enable fast mode with optimizations for Whisper path
+    
+    **Response metadata fields (new in v0.3.0):**
+    - **source**: "youtube_subtitles" or "whisper" - indicates transcription source
+    - **is_auto_generated**: boolean - whether subtitles are auto-generated (for subtitle source)
+    - **processing_time_ms**: integer - processing time in milliseconds
     """
     
     # Set request ID
@@ -565,7 +580,9 @@ async def transcribe_youtube(
         result = transcribe_youtube_video(
             url=url,
             language=language,
-            model_size=model_size
+            model_size=model_size,
+            prefer_subtitles=prefer_subtitles,
+            fast_mode=fast_mode
         )
         
         # Format as Markdown
@@ -816,7 +833,7 @@ async def get_config():
     """Get current API configuration (sensitive info hidden)."""
     return {
         "api": {
-            "version": "0.2.0",
+            "version": "0.3.0",
             "debug": API_DEBUG,
             "max_upload_size": MAX_UPLOAD_SIZE,
             "max_upload_size_mb": MAX_UPLOAD_SIZE // 1024 // 1024,

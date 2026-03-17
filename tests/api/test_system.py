@@ -57,10 +57,16 @@ class TestConfigEndpoints:
         convert_timeout = int(os.getenv("CONVERT_TIMEOUT", "300"))
         youtube_timeout = int(os.getenv("YOUTUBE_TRANSCRIBE_TIMEOUT", "600"))
         audio_timeout = int(os.getenv("AUDIO_TRANSCRIBE_TIMEOUT", "600"))
+        youtube_info_timeout = int(os.getenv("YOUTUBE_INFO_TIMEOUT", "300"))
+        youtube_download_timeout = int(os.getenv("YOUTUBE_DOWNLOAD_TIMEOUT", "600"))
+        audio_extract_timeout = int(os.getenv("AUDIO_EXTRACT_TIMEOUT", "300"))
         
         assert convert_timeout == 300
         assert youtube_timeout == 600
         assert audio_timeout == 600
+        assert youtube_info_timeout == 300
+        assert youtube_download_timeout == 600
+        assert audio_extract_timeout == 300
 
     def test_timeout_config_types(self):
         """Test timeout config returns integers."""
@@ -70,6 +76,9 @@ class TestConfigEndpoints:
             "convert": int(os.getenv("CONVERT_TIMEOUT", "300")),
             "youtube_transcribe": int(os.getenv("YOUTUBE_TRANSCRIBE_TIMEOUT", "600")),
             "audio_transcribe": int(os.getenv("AUDIO_TRANSCRIBE_TIMEOUT", "600")),
+            "youtube_info": int(os.getenv("YOUTUBE_INFO_TIMEOUT", "300")),
+            "youtube_download": int(os.getenv("YOUTUBE_DOWNLOAD_TIMEOUT", "600")),
+            "audio_extract": int(os.getenv("AUDIO_EXTRACT_TIMEOUT", "300")),
         }
         
         for value in timeouts.values():

@@ -44,9 +44,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Python 依賴構建工具
     build-essential \
     \
-    # YouTube 下載工具
-    yt-dlp \
-    \
     # 清理
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -76,6 +73,9 @@ RUN pip install --no-cache-dir \
     # Faster-Whisper（本地 STT，比 Whisper 快 2-4 倍）
     faster-whisper \
     psutil \
+    \
+    # YouTube 下載工具（最新版本）
+    yt-dlp \
     \
     # Testing dependencies
     pytest \

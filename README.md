@@ -26,7 +26,7 @@ Convert various file formats to Markdown via HTTP API with multi-language OCR su
 ## Features
 
 - **7 Asian Language OCR**: Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese
-- **YouTube Video Transcription**: Download audio and transcribe using **Faster-Whisper** (local, no API limits!)
+- **YouTube Video Transcription**: Download audio and transcribe using **Faster-Whisper** (local, no API limits!) with **subtitle priority for 10-100x speedup**
 - **Audio File Transcription**: Upload MP3/WAV/M4A and convert to text
 - **Instant Conversion**: Upload files and get Markdown immediately
 - **Dual Format Output**: Support `markdown` or `json` format
@@ -401,7 +401,7 @@ For issues, please check:
 
 **Created by:** Kimhsiao  
 **Last Updated:** 2026-03-17  
-**Version:** 0.2.0  
+**Version:** 0.3.0  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  
 **Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
 **New Features:** YouTube transcription, Audio transcription (Faster-Whisper), System Management API

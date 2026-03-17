@@ -54,3 +54,22 @@ CLEANUP_TYPES = {
 
 # Whisper model cache settings
 WHISPER_MODEL_CACHE_SIZE = 3  # Max models to keep in cache
+
+# Timeout settings (in seconds)
+DEFAULT_YOUTUBE_INFO_TIMEOUT = 300  # 5 minutes for getting video info
+DEFAULT_YOUTUBE_DOWNLOAD_TIMEOUT = 600  # 10 minutes for downloading audio
+DEFAULT_AUDIO_EXTRACT_TIMEOUT = 300  # 5 minutes for extracting audio from video
+
+# YouTube subtitle language priority
+# Used when checking available subtitles and selecting the best one
+SUBTITLE_LANG_PRIORITY = [
+    'zh-Hant',    # Traditional Chinese (Taiwan)
+    'zh-Hans',    # Simplified Chinese
+    'zh-TW',      # Traditional Chinese (Taiwan, alternative code)
+    'zh-CN',      # Simplified Chinese (alternative code)
+    'zh',         # Generic Chinese
+    'en',         # English
+]
+
+# Subtitle download timeout
+SUBTITLE_DOWNLOAD_TIMEOUT = 120  # 2 minutes for downloading subtitles

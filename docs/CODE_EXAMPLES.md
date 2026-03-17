@@ -335,25 +335,44 @@ console.log('OCR conversion complete!');
 ```python
 import requests
 
-# Chinese transcription
+# Chinese transcription (auto-detect subtitles, fastest)
 response = requests.post(
     'http://localhost:51083/api/v1/convert/youtube',
     params={
         'url': 'https://www.youtube.com/watch?v=VIDEO_ID',
         'language': 'zh',
-        'model_size': 'base'
+        'model_size': 'base',
+        'prefer_subtitles': True  # Use YouTube subtitles if available (2-5 seconds)
     }
 )
 
 with open('transcript.md', 'w', encoding='utf-8') as f:
+    f.write(response.text)
+
+# Force Whisper transcription (skip subtitle check)
+response = requests.post(
+    'http://localhost:51083/api/v1/convert/youtube',
+    params={
+        'url': 'https://www.youtube.com/watch?v=VIDEO_ID',
+        'language': 'zh',
+        'prefer_subtitles': False,  # Force Whisper transcription
+        'fast_mode': True  # Enable optimizations for faster processing
+    }
+)
+
+with open('transcript_whisper.md', 'w', encoding='utf-8') as f:
     f.write(response.text)
 ```
 
 ### cURL
 
 ```bash
-# Chinese transcription
+# Chinese transcription (auto-detect subtitles)
 curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh" \
+  -o transcript.md
+
+# Force Whisper transcription with fast mode
+curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&prefer_subtitles=false&fast_mode=true" \
   -o transcript.md
 
 # English transcription with JSON output

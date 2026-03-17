@@ -376,6 +376,9 @@ _config = {
         "convert": int(os.getenv("CONVERT_TIMEOUT", "300")),
         "youtube_transcribe": int(os.getenv("YOUTUBE_TRANSCRIBE_TIMEOUT", "600")),
         "audio_transcribe": int(os.getenv("AUDIO_TRANSCRIBE_TIMEOUT", "600")),
+        "youtube_info": int(os.getenv("YOUTUBE_INFO_TIMEOUT", "300")),
+        "youtube_download": int(os.getenv("YOUTUBE_DOWNLOAD_TIMEOUT", "600")),
+        "audio_extract": int(os.getenv("AUDIO_EXTRACT_TIMEOUT", "300")),
     }
 }
 

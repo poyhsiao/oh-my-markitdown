@@ -208,8 +208,11 @@ python scripts/cleanup.py --types all --force --json
 | `TEMP_DIR` | `/tmp` | Root directory for temporary files |
 | `WHISPER_MODEL_CACHE_SIZE` | `3` | Maximum number of cached Whisper models |
 | `CONVERT_TIMEOUT` | `300` | File conversion timeout (seconds) |
-| `YOUTUBE_TRANSCRIBE_TIMEOUT` | `600` | YouTube transcription timeout |
-| `AUDIO_TRANSCRIBE_TIMEOUT` | `600` | Audio transcription timeout |
+| `YOUTUBE_TRANSCRIBE_TIMEOUT` | `600` | YouTube transcription timeout (seconds) |
+| `AUDIO_TRANSCRIBE_TIMEOUT` | `600` | Audio transcription timeout (seconds) |
+| `YOUTUBE_INFO_TIMEOUT` | `300` | YouTube video info fetch timeout (seconds) |
+| `YOUTUBE_DOWNLOAD_TIMEOUT` | `600` | YouTube audio download timeout (seconds) |
+| `AUDIO_EXTRACT_TIMEOUT` | `300` | Audio extraction from video timeout (seconds) |
 | `AUTO_MAX_RETRIES` | `3` | Maximum retry attempts |
 | `AUTO_RETRY_BASE_DELAY` | `2` | Base delay for exponential backoff |
 | `AUTO_RETRY_MAX_DELAY` | `60` | Maximum delay between retries |

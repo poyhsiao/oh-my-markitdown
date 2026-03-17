@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-17
+
+### Added
+
+- YouTube subtitle priority strategy for faster transcription (2-5 seconds vs 30-60 minutes)
+- New parameters: `prefer_subtitles` and `fast_mode` for `/convert/youtube` endpoint
+- Multi-threading support for Whisper transcription (`cpu_threads` parameter)
+- Low quality audio download option for faster YouTube processing (`audio_quality` parameter)
+- Processing time tracking in response metadata
+
+### Changed
+
+- `transcribe_youtube_video()` now checks for subtitles first before falling back to Whisper
+- Response metadata now includes `source`, `is_auto_generated`, and `processing_time_ms` fields
+- Markdown output includes source information (YouTube Subtitles vs Whisper AI)
+
+---
+
 ## [0.2.0] - 2026-03-17
 
 ### Added
@@ -64,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.3.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/poyhsiao/oh-my-markitdown/releases/tag/v0.0.1
