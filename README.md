@@ -63,6 +63,29 @@ Convert various file formats to Markdown via HTTP API with multi-language OCR su
 | `libxml2-dev` / `libxslt1-dev` | Office file processing (mammoth, lxml) |
 | `build-essential` | Python dependency build tools |
 
+### SDK Migration (v0.4.0)
+
+This project now uses **native Python SDK APIs** instead of subprocess CLI calls for better performance and error handling:
+
+| Component | Before | After |
+|-----------|--------|-------|
+| **YouTube Download** | `yt-dlp` CLI | `yt-dlp` Python SDK |
+| **Audio Extraction** | `ffmpeg` CLI | `ffmpeg-python` SDK |
+| **OCR Processing** | `tesseract` CLI | `pytesseract` SDK |
+
+**Benefits:**
+- Reduced process fork overhead (~50-200ms per call)
+- Structured Python exceptions for better error handling
+- Easier debugging and testing
+- Type-safe API interactions
+
+**New SDK Modules:**
+- `api/youtube_client.py` - YouTube video/audio download
+- `api/audio_extractor.py` - Audio extraction and processing
+- `api/ocr_client.py` - OCR with multi-language support
+
+For implementation details, see the respective module files.
+
 ---
 
 ## OCR Multi-Language Support
