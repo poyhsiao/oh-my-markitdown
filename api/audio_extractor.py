@@ -4,7 +4,6 @@ Provides audio extraction from video files, optimized for Whisper transcription.
 """
 
 import os
-import subprocess
 import tempfile
 from typing import Optional
 
@@ -15,7 +14,6 @@ from api.constants import (
     AUDIO_CHANNELS,
     AUDIO_CODEC,
     AUDIO_FFMPEG_THREADS,
-    DEFAULT_AUDIO_EXTRACT_TIMEOUT,
 )
 
 
@@ -37,7 +35,6 @@ def extract_audio_from_video(
     channels: int = AUDIO_CHANNELS,
     codec: str = AUDIO_CODEC,
     threads: int = AUDIO_FFMPEG_THREADS,
-    timeout: int = DEFAULT_AUDIO_EXTRACT_TIMEOUT,
 ) -> str:
     """Extract audio from video file.
 
@@ -53,14 +50,12 @@ def extract_audio_from_video(
         channels: Number of audio channels (default: 1, mono)
         codec: Audio codec (default: pcm_s16le)
         threads: Number of decoding threads (default: 4)
-        timeout: Timeout in seconds (default: 300)
 
     Returns:
         Path to extracted audio file
 
     Raises:
         AudioExtractionError: Audio extraction failed
-        AudioExtractionTimeout: Audio extraction timed out
         FileNotFoundError: Video file not found
     """
     if not os.path.exists(video_path):
@@ -83,16 +78,7 @@ def extract_audio_from_video(
             .overwrite_output()
         )
 
-        cmd = ffmpeg.compile(stream)
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=timeout,
-        )
-
-        if result.returncode != 0:
-            error_msg = result.stderr.decode("utf-8") if result.stderr else "Unknown error"
-            raise AudioExtractionError(f"FFmpeg error: {error_msg}")
+        stream.run(capture_stdout=True, capture_stderr=True, quiet=True)
 
         if not os.path.exists(output_audio_path):
             raise AudioExtractionError(
@@ -101,10 +87,6 @@ def extract_audio_from_video(
 
         return output_audio_path
 
-    except subprocess.TimeoutExpired as e:
-        raise AudioExtractionTimeout(
-            f"Audio extraction timed out after {timeout} seconds"
-        ) from e
     except ffmpeg.Error as e:
         error_msg = e.stderr.decode("utf-8") if e.stderr else str(e)
         raise AudioExtractionError(f"Audio extraction failed: {error_msg}") from e

@@ -42,6 +42,7 @@ dependencies = [
     # === SDK 遷移新增 ===
     "pytesseract>=0.3.10",
     "ffmpeg-python>=0.2.0",
+    "pymupdf>=1.23.0,<1.25.0",
 ]
 
 [project.optional-dependencies]

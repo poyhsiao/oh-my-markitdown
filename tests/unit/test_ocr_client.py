@@ -63,7 +63,7 @@ class TestOcrImage:
         import pytesseract
         mock_exists.return_value = True
         mock_open.return_value = MagicMock()
-        mock_ocr.side_effect = pytesseract.TesseractError("OCR failed")
+        mock_ocr.side_effect = pytesseract.TesseractError(-1, "OCR failed")
 
         with pytest.raises(OCRError, match="OCR processing failed"):
             ocr_image(str(tmp_path / "test.png"))
@@ -94,12 +94,12 @@ class TestOcrPdf:
 
         mock_doc = MagicMock()
         mock_page = MagicMock()
-        mock_page.get_text.return_value = "Existing text in PDF"
+        mock_page.get_text.return_value = "Existing text in PDF that is longer than 50 characters threshold"
         mock_doc.__len__ = lambda self: 1
+        mock_doc.__iter__ = lambda self: iter([mock_page])
         mock_doc.load_page.return_value = mock_page
-        mock_fitz_open.return_value.__enter__ = lambda self: self
-        mock_fitz_open.return_value.__exit__ = MagicMock()
-        mock_fitz_open.return_value.__enter__.return_value = mock_doc
+        mock_doc.close = MagicMock()
+        mock_fitz_open.return_value = mock_doc
 
         result = ocr_pdf("/path/to/document.pdf")
 
@@ -124,10 +124,10 @@ class TestOcrPdf:
         mock_pixmap = MagicMock()
         mock_page.get_pixmap.return_value = mock_pixmap
         mock_doc.__len__ = lambda self: 1
+        mock_doc.__iter__ = lambda self: iter([mock_page])
         mock_doc.load_page.return_value = mock_page
-        mock_fitz_open.return_value.__enter__ = lambda self: self
-        mock_fitz_open.return_value.__exit__ = MagicMock()
-        mock_fitz_open.return_value.__enter__.return_value = mock_doc
+        mock_doc.close = MagicMock()
+        mock_fitz_open.return_value = mock_doc
 
         result = ocr_pdf("/path/to/scanned.pdf")
 
