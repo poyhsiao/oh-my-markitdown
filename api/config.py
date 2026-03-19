@@ -12,6 +12,7 @@ All configuration is centralized here for:
 import os
 from typing import Optional, List, Set
 from dataclasses import dataclass, field
+from .device_utils import detect_device, validate_device, get_compute_type_for_device, get_recommended_threads
 
 
 # Valid OCR languages
@@ -89,12 +90,48 @@ class OCRConfig:
 
 
 @dataclass
+class PerformanceConfig:
+    """Performance-related configuration for Whisper transcription."""
+    
+    # GPU Configuration
+    device: str = "auto"              # cpu | cuda | mps | auto
+    compute_type: str = "auto"        # int8 | float16 | float32 | auto
+    
+    # CPU Performance
+    cpu_threads: int = 0              # 0 = auto detect
+    
+    # VAD Configuration
+    vad_enabled: bool = True
+    vad_min_silence_ms: int = 300
+    vad_threshold: float = 0.6
+    vad_speech_pad_ms: int = 200
+    
+    # Model Selection
+    auto_model_selection: bool = True
+    
+    def get_effective_device(self) -> str:
+        """Get effective device (resolve 'auto')."""
+        return validate_device(self.device)
+    
+    def get_effective_compute_type(self) -> str:
+        """Get effective compute type."""
+        if self.compute_type == "auto":
+            return get_compute_type_for_device(self.get_effective_device())
+        return self.compute_type
+    
+    def get_effective_threads(self) -> int:
+        """Get effective CPU thread count."""
+        return get_recommended_threads(self.cpu_threads)
+
+
+@dataclass
 class WhisperConfig:
     """Whisper transcription configuration."""
     model: str = "base"
     device: str = "cpu"
     compute_type: str = "int8"
     default_language: str = "auto"
+    performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     
     def __post_init__(self):
         if self.model not in VALID_WHISPER_MODELS:

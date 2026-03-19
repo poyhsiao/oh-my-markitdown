@@ -23,9 +23,12 @@ Complete reference for MarkItDown API endpoints.
 | `GET` | `/api/v1/formats` | View supported file formats |
 | `GET` | `/api/v1/ocr-languages` | View OCR language support |
 | `GET` | `/api/v1/config` | View current configuration |
+| `GET` | `/api/v1/device-info` | Get compute device information (CPU/GPU) |
 | `POST` | `/api/v1/convert` | Upload file and convert |
 | `POST` | `/api/v1/convert/youtube` | YouTube video transcription (Faster-Whisper) |
 | `POST` | `/api/v1/convert/audio` | Audio file transcription (Faster-Whisper) |
+| `POST` | `/api/v1/convert/video` | Video file transcription (Faster-Whisper) |
+| `POST` | `/api/v1/convert/url` | Convert from URL |
 | `GET` | `/api/v1/convert/languages` | Supported transcription languages |
 | `GET` | `/api/v1/admin/storage` | Query storage usage |
 | `POST` | `/api/v1/admin/cleanup` | Clean up temporary files |
@@ -150,6 +153,17 @@ Transcribe YouTube videos using hybrid strategy for optimal speed.
 | `include_metadata` | Boolean | No | `true` | Include video metadata |
 | `prefer_subtitles` | Boolean | No | `true` | Prefer YouTube subtitles if available (faster) |
 | `fast_mode` | Boolean | No | `false` | Enable fast mode optimizations for Whisper |
+| `device` | String | No | `auto` | Compute device: `cpu`, `cuda`, `mps`, `auto` |
+| `cpu_threads` | Integer | No | `0` | CPU threads (0 = auto-detect, max 8) |
+| `vad_enabled` | Boolean | No | `true` | Enable Voice Activity Detection |
+
+#### Performance Parameters (New in v0.3.0)
+
+| Parameter | Description |
+|-----------|-------------|
+| `device` | Compute device selection. `auto` detects GPU if available (CUDA > MPS > CPU). Use `cuda` for NVIDIA GPU, `mps` for Apple Silicon, `cpu` for CPU-only. |
+| `cpu_threads` | Number of CPU threads for transcription. `0` auto-detects based on CPU cores (capped at 8). Higher values may improve speed on multi-core systems. |
+| `vad_enabled` | Voice Activity Detection filters out silence, reducing processing time by 20-40%. Disable for audio with no silence or if experiencing issues. |
 
 #### Model Sizes
 
@@ -232,14 +246,25 @@ MP3, WAV, M4A, FLAC, OGG, etc.
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `file` | File | Yes | - | Audio file to transcribe |
-| `language` | String | No | `zh` | Language code |
-| `model_size` | String | No | `base` | Model size |
+| `language` | String | No | `auto` | Language code (`auto` for auto-detect) |
+| `model_size` | String | No | `base` | Model size: tiny, base, small, medium, large |
 | `return_format` | String | No | `markdown` | Response format |
+| `include_timestamps` | Boolean | No | `false` | Include timestamps in transcript |
+| `device` | String | No | `auto` | Compute device: `cpu`, `cuda`, `mps`, `auto` |
+| `cpu_threads` | Integer | No | `0` | CPU threads (0 = auto-detect, max 8) |
+| `vad_enabled` | Boolean | No | `true` | Enable Voice Activity Detection |
 
 #### Example
 
 ```bash
 curl -X POST "http://localhost:51083/api/v1/convert/audio?language=zh" \
+  -F "file=@audio.mp3" \
+  -o transcript.md
+```
+
+**With GPU acceleration:**
+```bash
+curl -X POST "http://localhost:51083/api/v1/convert/audio?language=zh&device=cuda" \
   -F "file=@audio.mp3" \
   -o transcript.md
 ```
@@ -324,6 +349,78 @@ curl http://localhost:51083/api/v1/ocr-languages
 
 ---
 
+## Device Information
+
+### GET /api/v1/device-info
+
+Get compute device information for Whisper transcription.
+
+This endpoint helps users understand what compute resources are available and choose the optimal device for transcription.
+
+#### Example
+
+```bash
+curl http://localhost:51083/api/v1/device-info
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "device": "cpu",
+    "cuda_available": false,
+    "mps_available": false,
+    "cpu_count": 8,
+    "recommended_compute_type": "int8"
+  },
+  "metadata": {},
+  "request_id": "req-xxx"
+}
+```
+
+**With NVIDIA GPU available:**
+```json
+{
+  "success": true,
+  "data": {
+    "device": "cuda",
+    "cuda_available": true,
+    "cuda_device_name": "NVIDIA GeForce RTX 3080",
+    "cuda_device_count": 1,
+    "cuda_memory_gb": 10.0,
+    "mps_available": false,
+    "cpu_count": 16,
+    "recommended_compute_type": "float16"
+  }
+}
+```
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `device` | String | Detected device: `cpu`, `cuda`, or `mps` |
+| `cuda_available` | Boolean | Whether NVIDIA CUDA is available |
+| `mps_available` | Boolean | Whether Apple Silicon MPS is available |
+| `cpu_count` | Integer | Number of CPU cores |
+| `recommended_compute_type` | String | Recommended compute type: `int8` (CPU), `float16` (GPU) |
+| `cuda_device_name` | String | GPU name (if CUDA available) |
+| `cuda_device_count` | Integer | Number of CUDA devices |
+| `cuda_memory_gb` | Float | GPU memory in GB |
+
+#### Device Selection Guide
+
+| Device | Use Case | Performance |
+|--------|----------|-------------|
+| `cpu` | Default, no GPU available | Baseline speed |
+| `cuda` | NVIDIA GPU (RTX series) | 4-10x faster than CPU |
+| `mps` | Apple Silicon (M1/M2/M3) | 2-4x faster than CPU |
+| `auto` | Auto-detect best available | Recommended |
+
+---
+
 ## Configuration
 
 ### GET /api/v1/config
@@ -341,7 +438,7 @@ curl http://localhost:51083/api/v1/config
 ```json
 {
   "api": {
-    "version": "0.3.0",
+    "version": "0.3.1",
     "debug": false,
     "max_upload_size": 52428800,
     "max_upload_size_mb": 50

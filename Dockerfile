@@ -92,6 +92,7 @@ RUN mkdir -p /app/input /app/output /app/data /app/api
 COPY api/__init__.py /app/api/__init__.py
 COPY api/main.py /app/api/main.py
 COPY api/config.py /app/api/config.py
+COPY api/device_utils.py /app/api/device_utils.py
 COPY api/whisper_transcribe.py /app/api/whisper_transcribe.py
 COPY api/constants.py /app/api/constants.py
 COPY api/middleware.py /app/api/middleware.py

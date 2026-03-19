@@ -73,3 +73,34 @@ SUBTITLE_LANG_PRIORITY = [
 
 # Subtitle download timeout
 SUBTITLE_DOWNLOAD_TIMEOUT = 120  # 2 minutes for downloading subtitles
+
+# ===== VAD Parameters =====
+DEFAULT_VAD_MIN_SILENCE_MS = 300
+DEFAULT_VAD_THRESHOLD = 0.6
+DEFAULT_VAD_SPEECH_PAD_MS = 200
+
+# ===== Audio Extraction Parameters =====
+AUDIO_SAMPLE_RATE = 16000           # 16kHz (Whisper native)
+AUDIO_CHANNELS = 1                  # Mono
+AUDIO_CODEC = "pcm_s16le"           # WAV/PCM
+AUDIO_FFMPEG_THREADS = 4            # FFmpeg thread count
+
+# ===== CPU Threading =====
+MAX_CPU_THREADS = 8
+MIN_CPU_THREADS = 1
+DEFAULT_CPU_THREADS = 4
+
+# ===== Model Selection Thresholds (seconds) =====
+MODEL_SELECTION_THRESHOLDS = {
+    "tiny": 120,         # < 2 minutes
+    "base": 600,         # 2-10 minutes
+    "small": 1800,       # 10-30 minutes
+    "medium": float("inf")  # > 30 minutes
+}
+
+# ===== Compute Type by Device =====
+COMPUTE_TYPE_BY_DEVICE = {
+    "cpu": "int8",
+    "cuda": "float16",
+    "mps": "float16"
+}

@@ -68,7 +68,7 @@ class TestTranscribeBenchmark:
 ### Task 1.2: Create Device Detection Module
 
 **Priority:** P0  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 30 minutes
 
 **Description:**
@@ -78,11 +78,11 @@ Create `api/device_utils.py` with GPU detection and device information functions
 - `api/device_utils.py`
 
 **Acceptance Criteria:**
-- [ ] `detect_device()` function returns correct device
-- [ ] `get_compute_type_for_device()` returns appropriate compute type
-- [ ] `get_device_info()` returns complete device information
-- [ ] `validate_device()` validates requested device availability
-- [ ] Unit tests pass
+- [x] `detect_device()` function returns correct device
+- [x] `get_compute_type_for_device()` returns appropriate compute type
+- [x] `get_device_info()` returns complete device information
+- [x] `validate_device()` validates requested device availability
+- [x] Unit tests pass
 
 **Implementation Notes:**
 ```python
@@ -101,7 +101,7 @@ def detect_device() -> DeviceType:
 ### Task 1.3: Update Configuration Module
 
 **Priority:** P0  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 30 minutes
 
 **Description:**
@@ -111,12 +111,12 @@ Add `PerformanceConfig` dataclass to `api/config.py`.
 - `api/config.py`
 
 **Acceptance Criteria:**
-- [ ] `PerformanceConfig` dataclass created
-- [ ] `get_effective_device()` resolves "auto"
-- [ ] `get_effective_compute_type()` resolves "auto"
-- [ ] `get_effective_threads()` auto-detects CPU cores
-- [ ] Configuration validates correctly
-- [ ] Unit tests pass
+- [x] `PerformanceConfig` dataclass created
+- [x] `get_effective_device()` resolves "auto"
+- [x] `get_effective_compute_type()` resolves "auto"
+- [x] `get_effective_threads()` auto-detects CPU cores
+- [x] Configuration validates correctly
+- [x] Unit tests pass
 
 **Implementation Notes:**
 ```python
@@ -137,7 +137,7 @@ class PerformanceConfig:
 ### Task 2.1: Update Constants Module
 
 **Priority:** P1  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 20 minutes
 
 **Description:**
@@ -147,10 +147,10 @@ Add VAD, audio, and model selection constants to `api/constants.py`.
 - `api/constants.py`
 
 **Acceptance Criteria:**
-- [ ] VAD constants added
-- [ ] Audio extraction constants added
-- [ ] Model selection thresholds added
-- [ ] CPU threading constants added
+- [x] VAD constants added
+- [x] Audio extraction constants added
+- [x] Model selection thresholds added
+- [x] CPU threading constants added
 
 **Implementation Notes:**
 ```python
@@ -174,7 +174,7 @@ MODEL_SELECTION_THRESHOLDS = {
 ### Task 2.2: Implement Model Selection Function
 
 **Priority:** P1  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 20 minutes
 
 **Description:**
@@ -184,9 +184,9 @@ Add `get_recommended_model()` function to `api/whisper_transcribe.py`.
 - `api/whisper_transcribe.py`
 
 **Acceptance Criteria:**
-- [ ] Function returns correct model based on duration
-- [ ] Unit tests pass
-- [ ] Edge cases handled (0 duration, very long)
+- [x] Function returns correct model based on duration
+- [x] Unit tests pass
+- [x] Edge cases handled (0 duration, very long)
 
 **Implementation Notes:**
 ```python
@@ -298,7 +298,7 @@ def transcribe_audio(
 ### Task 3.1: Add New API Parameters
 
 **Priority:** P1  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 45 minutes
 
 **Description:**
@@ -313,10 +313,10 @@ Add new parameters to all Whisper transcription endpoints.
 - `/api/v1/convert/youtube`
 
 **Acceptance Criteria:**
-- [ ] All endpoints accept new parameters
-- [ ] Parameters optional with defaults
-- [ ] Backward compatible
-- [ ] Integration tests pass
+- [x] All endpoints accept new parameters
+- [x] Parameters optional with defaults
+- [x] Backward compatible
+- [x] Integration tests pass
 
 **Implementation Notes:**
 ```python
@@ -336,7 +336,7 @@ async def convert_video(
 ### Task 3.2: Add Device Info Endpoint
 
 **Priority:** P2  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 20 minutes
 
 **Description:**
@@ -346,10 +346,10 @@ Create new `/api/v1/device-info` endpoint.
 - `api/main.py`
 
 **Acceptance Criteria:**
-- [ ] Endpoint returns device information
-- [ ] CUDA info included when available
-- [ ] MPS info included when available
-- [ ] Response format documented
+- [x] Endpoint returns device information
+- [x] CUDA info included when available
+- [x] MPS info included when available
+- [x] Response format documented
 
 **Implementation Notes:**
 ```python
@@ -363,7 +363,7 @@ async def get_device_info_endpoint():
 ### Task 3.3: Update OpenAPI Documentation
 
 **Priority:** P2  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 30 minutes
 
 **Description:**
@@ -374,10 +374,10 @@ Update API documentation with new parameters and endpoint.
 - `docs/api/` (if exists)
 
 **Acceptance Criteria:**
-- [ ] All new parameters documented
-- [ ] New endpoint documented
-- [ ] Examples provided
-- [ ] ReDoc/Docs render correctly
+- [x] All new parameters documented
+- [x] New endpoint documented
+- [x] Examples provided
+- [x] ReDoc/Docs render correctly
 
 ---
 
@@ -490,7 +490,7 @@ WHISPER_VAD_MIN_SILENCE_MS=300
 ### Task 5.1: Update README
 
 **Priority:** P2  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 20 minutes
 
 **Description:**
@@ -501,17 +501,17 @@ Update README with GPU support and performance optimization information.
 - `README_ZH_TW.md`
 
 **Acceptance Criteria:**
-- [ ] GPU support documented
-- [ ] Performance improvements documented
-- [ ] Configuration examples provided
-- [ ] Docker GPU instructions included
+- [x] GPU support documented
+- [x] Performance improvements documented
+- [x] Configuration examples provided
+- [x] Docker GPU instructions included
 
 ---
 
 ### Task 5.2: Update API Documentation
 
 **Priority:** P2  
-**Status:** [ ] Pending  
+**Status:** [x] Completed  
 **Estimated Time:** 20 minutes
 
 **Description:**
@@ -522,9 +522,9 @@ Update API documentation with new endpoints and parameters.
 - Inline documentation
 
 **Acceptance Criteria:**
-- [ ] New parameters documented
-- [ ] Device info endpoint documented
-- [ ] Examples provided
+- [x] New parameters documented
+- [x] Device info endpoint documented
+- [x] Examples provided
 
 ---
 
@@ -550,9 +550,9 @@ Update the original performance plan document status.
 ## Testing Checklist
 
 ### Unit Tests
-- [ ] `test_device_utils.py` - All device detection tests pass
-- [ ] `test_config.py` - Configuration resolution tests pass
-- [ ] `test_whisper_transcribe.py` - Model selection tests pass
+- [x] `test_device_utils.py` - All device detection tests pass
+- [x] `test_config.py` - Configuration resolution tests pass
+- [x] `test_whisper_transcribe.py` - Model selection tests pass
 
 ### Performance Tests
 - [ ] CPU benchmark - Processing time < 1.5x duration
@@ -565,10 +565,10 @@ Update the original performance plan document status.
 - [ ] Transcription completeness - 100%
 
 ### Integration Tests
-- [ ] Video API with new parameters
-- [ ] Audio API with new parameters
-- [ ] YouTube API with new parameters
-- [ ] Device info endpoint
+- [x] Video API with new parameters
+- [x] Audio API with new parameters
+- [x] YouTube API with new parameters
+- [x] Device info endpoint
 
 ---
 
@@ -641,9 +641,10 @@ Task 5.1 (README) → Task 5.2 (API Docs) → Task 5.3 (Plan Update)
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-03-19 | 1.0.0 | Initial task breakdown |
+| 2026-03-19 | 1.1.0 | Completed Phase 1-3 and Phase 5 tasks. Added GPU support, device-info endpoint, performance parameters. |
 
 ---
 
-**Document Status:** Ready for Implementation  
-**Next Step:** Begin with Task 1.1  
+**Document Status:** Implementation Complete (Phase 1-3, 5)  
+**Next Step:** Phase 4 Docker GPU Support (optional)  
 **Owner:** Development Team

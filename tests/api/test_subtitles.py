@@ -662,3 +662,110 @@ class TestGetVideoTitle:
         title = _get_video_title("https://youtube.com/watch?v=test")
 
         assert title == "Unknown"
+
+
+class TestIncludeTimestamps:
+    """Test include_timestamps parameter in format_multiline_output."""
+
+    def test_format_multiline_output_without_timestamps(self):
+        """Test format_multiline_output with include_timestamps=False."""
+        from api.subtitles import format_multiline_output
+
+        segments = [
+            {"start": 0.0, "end": 2.0, "text": "Hello world"},
+            {"start": 2.0, "end": 4.0, "text": "This is a test"},
+        ]
+
+        result = format_multiline_output(
+            segments,
+            output_format="markdown",
+            include_timestamps=False
+        )
+
+        assert "markdown" in result
+        assert "Hello world" in result["markdown"]
+        assert "This is a test" in result["markdown"]
+        assert "[0:00]" not in result["markdown"]
+        assert "[0:02]" not in result["markdown"]
+
+    def test_format_multiline_output_with_timestamps(self):
+        """Test format_multiline_output with include_timestamps=True."""
+        from api.subtitles import format_multiline_output
+
+        segments = [
+            {"start": 0.0, "end": 2.0, "text": "Hello world"},
+            {"start": 2.0, "end": 4.0, "text": "This is a test"},
+        ]
+
+        result = format_multiline_output(
+            segments,
+            output_format="markdown",
+            include_timestamps=True
+        )
+
+        assert "markdown" in result
+        assert "Hello world" in result["markdown"]
+        assert "This is a test" in result["markdown"]
+        assert "[0:00]" in result["markdown"]
+        assert "[0:02]" in result["markdown"]
+
+    def test_format_multiline_output_default_no_timestamps(self):
+        """Test format_multiline_output defaults to no timestamps."""
+        from api.subtitles import format_multiline_output
+
+        segments = [
+            {"start": 0.0, "end": 2.0, "text": "Test text"},
+        ]
+
+        result = format_multiline_output(
+            segments,
+            output_format="markdown"
+        )
+
+        assert "markdown" in result
+        assert "Test text" in result["markdown"]
+        assert "[0:00]" not in result["markdown"]
+
+    @patch('api.whisper_transcribe.transcribe_with_timestamps')
+    def test_transcribe_with_formats_without_timestamps(self, mock_transcribe):
+        """Test transcribe_with_formats passes include_timestamps=False correctly."""
+        from api.whisper_transcribe import transcribe_with_formats
+
+        mock_transcribe.return_value = (
+            "Transcript text",
+            [
+                {"start": 0.0, "end": 2.0, "text": "Hello"},
+                {"start": 2.0, "end": 4.0, "text": "World"},
+            ]
+        )
+
+        result, metadata = transcribe_with_formats(
+            audio_path="/tmp/test.mp3",
+            output_formats="markdown",
+            include_timestamps=False
+        )
+
+        assert "markdown" in result
+        assert "[0:00]" not in result["markdown"]
+
+    @patch('api.whisper_transcribe.transcribe_with_timestamps')
+    def test_transcribe_with_formats_with_timestamps(self, mock_transcribe):
+        """Test transcribe_with_formats passes include_timestamps=True correctly."""
+        from api.whisper_transcribe import transcribe_with_formats
+
+        mock_transcribe.return_value = (
+            "Transcript text",
+            [
+                {"start": 0.0, "end": 2.0, "text": "Hello"},
+                {"start": 2.0, "end": 4.0, "text": "World"},
+            ]
+        )
+
+        result, metadata = transcribe_with_formats(
+            audio_path="/tmp/test.mp3",
+            output_formats="markdown",
+            include_timestamps=True
+        )
+
+        assert "markdown" in result
+        assert "[0:00]" in result["markdown"]

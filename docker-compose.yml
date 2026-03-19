@@ -40,8 +40,13 @@ services:
       
       # Whisper 配置
       - WHISPER_MODEL=${WHISPER_MODEL:-base}
-      - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
-      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+      - WHISPER_DEVICE=${WHISPER_DEVICE:-auto}
+      - WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-auto}
+      - WHISPER_CPU_THREADS=${WHISPER_CPU_THREADS:-0}
+      - WHISPER_VAD_ENABLED=${WHISPER_VAD_ENABLED:-true}
+      - WHISPER_VAD_MIN_SILENCE_MS=${WHISPER_VAD_MIN_SILENCE_MS:-300}
+      - WHISPER_VAD_THRESHOLD=${WHISPER_VAD_THRESHOLD:-0.6}
+      - WHISPER_MODEL_AUTO_SELECTION=${WHISPER_MODEL_AUTO_SELECTION:-true}
       
       # Python 配置
       - PYTHONUNBUFFERED=1
@@ -128,3 +133,83 @@ services:
     # 依賴 API 服務（可選，確保同時啟動）
     depends_on:
       - markitdown-api
+
+  # GPU 加速服務（可選 - 需要 NVIDIA GPU）
+  # 使用方式：docker compose --profile gpu up -d
+  markitdown-api-gpu:
+    profiles:
+      - gpu
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: markitdown-api-gpu
+    ports:
+      - "${API_PORT:-51083}:8000"
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+      - ${INPUT_DIR:-./input}:/app/input
+      - ${OUTPUT_DIR:-./output}:/app/output
+    environment:
+      # API 配置
+      - API_HOST=${API_HOST:-0.0.0.0}
+      - API_PORT_INTERNAL=${API_PORT_INTERNAL:-8000}
+      - API_DEBUG=${API_DEBUG:-false}
+      - API_WORKERS=${API_WORKERS:-1}
+      
+      # OCR 預設配置
+      - DEFAULT_OCR_LANG=${DEFAULT_OCR_LANG:-chi_tra+eng}
+      - ENABLE_PLUGINS_BY_DEFAULT=${ENABLE_PLUGINS_BY_DEFAULT:-false}
+      
+      # 上傳限制
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-52428800}
+      
+      # OpenAI（可選）
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      
+      # Whisper GPU 配置
+      - WHISPER_MODEL=${WHISPER_MODEL:-base}
+      - WHISPER_DEVICE=cuda
+      - WHISPER_COMPUTE_TYPE=float16
+      - WHISPER_CPU_THREADS=${WHISPER_CPU_THREADS:-0}
+      - WHISPER_VAD_ENABLED=${WHISPER_VAD_ENABLED:-true}
+      - WHISPER_VAD_MIN_SILENCE_MS=${WHISPER_VAD_MIN_SILENCE_MS:-300}
+      - WHISPER_VAD_THRESHOLD=${WHISPER_VAD_THRESHOLD:-0.6}
+      - WHISPER_MODEL_AUTO_SELECTION=${WHISPER_MODEL_AUTO_SELECTION:-true}
+      
+      # Python 配置
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    
+    # GPU 資源配置
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-8G}
+          cpus: '${CPU_LIMIT:-4.0}'
+        reservations:
+          memory: ${MEMORY_RESERVE:-4G}
+          cpus: '${CPU_RESERVE:-1.0}'
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # 重啟策略
+    restart: unless-stopped
+    
+    # 健康檢查
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: ${HEALTHCHECK_INTERVAL:-30s}
+      timeout: ${HEALTHCHECK_TIMEOUT:-10s}
+      retries: ${HEALTHCHECK_RETRIES:-3}
+      start_period: ${HEALTHCHECK_START_PERIOD:-60s}
+    
+    # 日誌配置
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "${LOG_MAX_SIZE:-10m}"
+        max-file: "${LOG_MAX_FILE:-3}"

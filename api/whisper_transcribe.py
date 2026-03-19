@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 from faster_whisper import WhisperModel
 
-from .constants import WHISPER_MODEL_CACHE_SIZE, DEFAULT_YOUTUBE_INFO_TIMEOUT, DEFAULT_YOUTUBE_DOWNLOAD_TIMEOUT, DEFAULT_AUDIO_EXTRACT_TIMEOUT, SUBTITLE_LANG_PRIORITY, SUBTITLE_DOWNLOAD_TIMEOUT
+from .constants import WHISPER_MODEL_CACHE_SIZE, DEFAULT_YOUTUBE_INFO_TIMEOUT, DEFAULT_YOUTUBE_DOWNLOAD_TIMEOUT, DEFAULT_AUDIO_EXTRACT_TIMEOUT, SUBTITLE_LANG_PRIORITY, SUBTITLE_DOWNLOAD_TIMEOUT, MODEL_SELECTION_THRESHOLDS, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, AUDIO_CODEC, AUDIO_FFMPEG_THREADS, DEFAULT_VAD_MIN_SILENCE_MS, DEFAULT_VAD_THRESHOLD, DEFAULT_VAD_SPEECH_PAD_MS, DEFAULT_CPU_THREADS
 from .subtitles import format_multiline_output, format_transcript_with_timestamps
 
 # Read configuration from environment variables
@@ -90,10 +90,30 @@ def update_cache_max_size(max_size: int):
         oldest_key = _model_cache._order.pop(0)
         del _model_cache._cache[oldest_key]
 
+
+def get_recommended_model(duration_seconds: float) -> str:
+    """
+    Get recommended model size based on media duration.
+    
+    Args:
+        duration_seconds: Media duration in seconds
+        
+    Returns:
+        Recommended model size (tiny/base/small/medium)
+    """
+    if duration_seconds < MODEL_SELECTION_THRESHOLDS["tiny"]:
+        return "tiny"
+    elif duration_seconds < MODEL_SELECTION_THRESHOLDS["base"]:
+        return "base"
+    elif duration_seconds < MODEL_SELECTION_THRESHOLDS["small"]:
+        return "small"
+    return "medium"
+
+
 def get_model(
-    model_size: str = None, 
-    device: str = None, 
-    compute_type: str = None,
+    model_size: Optional[str] = None, 
+    device: Optional[str] = None, 
+    compute_type: Optional[str] = None,
     cpu_threads: int = 4
 ):
     """
@@ -132,40 +152,58 @@ def get_model(
 def transcribe_audio(
     audio_path: str,
     language: str = "auto",
-    model_size: str = "base",
-    device: str = "cpu",
-    compute_type: str = "int8",
-    word_timestamps: bool = False,
-    cpu_threads: int = 4
+    model_size: Optional[str] = None,
+    device: Optional[str] = None,
+    compute_type: Optional[str] = None,
+    cpu_threads: Optional[int] = None,
+    vad_enabled: bool = True,
+    vad_params: Optional[dict] = None,
+    word_timestamps: bool = False
 ) -> Tuple[str, dict]:
     """
-    Transcribe audio file
+    Transcribe audio file with Whisper.
     
     Args:
-        audio_path: Audio file path
-        language: Language code (auto=auto-detect, zh, en, ja, ko, etc.)
-        model_size: Model size
-        device: Device to run on
-        compute_type: Compute type
-        word_timestamps: Whether to return word-level timestamps
-        cpu_threads: Number of CPU threads for parallel processing (CPU only, default: 4)
-    
+        audio_path: Path to audio file
+        language: Language code or "auto" for detection
+        model_size: Model size (None = use config default)
+        device: Compute device (None = use config default)
+        compute_type: Compute type (None = use config default)
+        cpu_threads: CPU threads (None = auto detect)
+        vad_enabled: Enable VAD filtering
+        vad_params: Custom VAD parameters
+        word_timestamps: Enable word-level timestamps
+        
     Returns:
-        (transcript text, metadata)
+        Tuple of (transcription_text, metadata)
     """
+    # Use environment variables or defaults
+    effective_model = model_size or DEFAULT_MODEL
+    effective_device = device or DEFAULT_DEVICE
+    effective_compute_type = compute_type or DEFAULT_COMPUTE_TYPE
+    effective_threads = cpu_threads or DEFAULT_CPU_THREADS
+    
     # Handle "auto" for auto-detection (Whisper expects None for auto-detect)
     actual_language = None if language == "auto" else language
     
+    # VAD parameters
+    if vad_enabled and vad_params is None:
+        vad_params = {
+            "min_silence_duration_ms": DEFAULT_VAD_MIN_SILENCE_MS,
+            "threshold": DEFAULT_VAD_THRESHOLD,
+            "speech_pad_ms": DEFAULT_VAD_SPEECH_PAD_MS
+        }
+    
     # Load model with CPU threading support
-    model = get_model(model_size, device, compute_type, cpu_threads=cpu_threads)
+    model = get_model(effective_model, effective_device, effective_compute_type, cpu_threads=effective_threads)
     
     # Transcribe
     segments, info = model.transcribe(
         audio_path,
         language=actual_language,
         word_timestamps=word_timestamps,
-        vad_filter=True,  # Use VAD to filter silence
-        vad_parameters=dict(min_silence_duration_ms=500)
+        vad_filter=vad_enabled,
+        vad_parameters=vad_params if vad_enabled else None
     )
     
     # Combine text
@@ -182,7 +220,10 @@ def transcribe_audio(
         "duration": info.duration,
         "duration_after_vad": info.duration_after_vad,
         "segments_count": len(list(segments)) if segments else 0,
-        "model": model_size,
+        "model": effective_model,
+        "device": effective_device,
+        "compute_type": effective_compute_type,
+        "vad_enabled": vad_enabled,
     }
     
     return transcript, metadata
@@ -282,7 +323,12 @@ def download_youtube_audio(
 def transcribe_youtube_video(
     url: str,
     language: str = "zh",
-    model_size: str = "base",
+    model_size: Optional[str] = None,
+    device: Optional[str] = None,
+    compute_type: Optional[str] = None,
+    cpu_threads: Optional[int] = None,
+    vad_enabled: bool = True,
+    vad_params: Optional[dict] = None,
     output_dir: str = "/tmp",
     prefer_subtitles: bool = True,
     fast_mode: bool = False
@@ -297,7 +343,12 @@ def transcribe_youtube_video(
     Args:
         url: YouTube URL
         language: Language code
-        model_size: Model size (for Whisper)
+        model_size: Model size (None = use config default)
+        device: Compute device (None = use config default)
+        compute_type: Compute type (None = use config default)
+        cpu_threads: CPU threads (None = auto detect)
+        vad_enabled: Enable VAD filtering
+        vad_params: Custom VAD parameters
         output_dir: Temporary file directory
         prefer_subtitles: Prefer YouTube subtitles if available
         fast_mode: Enable optimizations for Whisper (lower quality, multi-threading)
@@ -343,12 +394,16 @@ def transcribe_youtube_video(
     try:
         # Transcribe with optional optimizations
         # Use more CPU threads in fast_mode for faster processing
-        cpu_threads = 8 if fast_mode else 4
+        effective_threads = cpu_threads or (8 if fast_mode else None)
         transcript, metadata = transcribe_audio(
             audio_path,
             language=language,
             model_size=model_size,
-            cpu_threads=cpu_threads
+            device=device,
+            compute_type=compute_type,
+            cpu_threads=effective_threads,
+            vad_enabled=vad_enabled,
+            vad_params=vad_params
         )
         
         processing_time_ms = int((time.time() - start_time) * 1000)
@@ -459,7 +514,12 @@ def format_transcript_as_markdown(
 def transcribe_with_formats(
     audio_path: str,
     language: str = "auto",
-    model_size: str = "base",
+    model_size: Optional[str] = None,
+    device: Optional[str] = None,
+    compute_type: Optional[str] = None,
+    cpu_threads: Optional[int] = None,
+    vad_enabled: bool = True,
+    vad_params: Optional[dict] = None,
     output_formats: str = "markdown",
     include_timestamps: bool = False
 ) -> Tuple[Dict[str, str], dict]:
@@ -469,7 +529,12 @@ def transcribe_with_formats(
     Args:
         audio_path: Audio file path
         language: Language code (auto=auto-detect)
-        model_size: Model size
+        model_size: Model size (None = use config default)
+        device: Compute device (None = use config default)
+        compute_type: Compute type (None = use config default)
+        cpu_threads: CPU threads (None = auto detect)
+        vad_enabled: Enable VAD filtering
+        vad_params: Custom VAD parameters
         output_formats: Output formats (comma-separated, e.g., markdown,srt,vtt)
         include_timestamps: Whether to include timestamps in Markdown
     
@@ -483,26 +548,23 @@ def transcribe_with_formats(
     _, segments_list = transcribe_with_timestamps(
         audio_path,
         language=actual_language,
-        model_size=model_size
+        model_size=model_size or DEFAULT_MODEL
     )
     
     # Use subtitles module to generate multiple formats
     formats_dict = format_multiline_output(
         segments_list,
-        output_format=output_formats
+        output_format=output_formats,
+        include_timestamps=include_timestamps
     )
-    
-    # If timestamps needed, regenerate Markdown
-    if include_timestamps and "markdown" in formats_dict:
-        formats_dict["markdown"] = format_transcript_with_timestamps(
-            segments_list,
-            include_timestamps=True
-        )
     
     # Metadata
     metadata = {
         "language": language,
-        "model": model_size,
+        "model": model_size or DEFAULT_MODEL,
+        "device": device or DEFAULT_DEVICE,
+        "compute_type": compute_type or DEFAULT_COMPUTE_TYPE,
+        "vad_enabled": vad_enabled,
         "segments_count": len(segments_list),
         "formats": list(formats_dict.keys())
     }
@@ -512,42 +574,49 @@ def transcribe_with_formats(
 
 def extract_audio_from_video(
     video_path: str,
-    output_audio_path: Optional[str] = None
+    output_audio_path: Optional[str] = None,
+    threads: int = AUDIO_FFMPEG_THREADS
 ) -> str:
     """
-    Extract audio from video file
+    Extract audio from video file.
+    
+    Optimizations:
+    - WAV/PCM format (no compression overhead)
+    - 16kHz sample rate (Whisper native)
+    - Mono channel
+    - Multi-threaded decoding
     
     Args:
-        video_path: Video file path
-        output_audio_path: Output audio file path (optional)
+        video_path: Path to video file
+        output_audio_path: Output path (optional, temp file if None)
+        threads: FFmpeg thread count
     
     Returns:
-        Extracted audio file path
+        Path to extracted audio file
     """
     if output_audio_path is None:
-        # Auto-generate output path
-        base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_audio_path = os.path.join(
-            tempfile.gettempdir(),
-            f"{base_name}.mp3"
-        )
+        output_audio_path = tempfile.mktemp(suffix=".wav")
+    
+    cmd = [
+        "ffmpeg",
+        "-threads", str(threads),     # Multi-threaded decoding
+        "-i", video_path,
+        "-vn",                        # No video
+        "-ac", str(AUDIO_CHANNELS),   # Mono
+        "-ar", str(AUDIO_SAMPLE_RATE),# 16kHz
+        "-acodec", AUDIO_CODEC,       # WAV/PCM
+        "-y", output_audio_path
+    ]
     
     result = subprocess.run(
-        [
-            "ffmpeg",
-            "-i", video_path,
-            "-vn",
-            "-acodec", "libmp3lame",
-            "-y",
-            output_audio_path
-        ],
+        cmd,
         capture_output=True,
         text=True,
         timeout=AUDIO_EXTRACT_TIMEOUT
     )
     
     if result.returncode != 0:
-        raise Exception(f"Failed to extract audio from video: {result.stderr}")
+        raise RuntimeError(f"Audio extraction failed: {result.stderr}")
     
     return output_audio_path
 
@@ -633,7 +702,7 @@ def check_available_subtitles(url: str) -> dict:
 def download_and_convert_subtitles(
     url: str,
     output_dir: str = "/tmp",
-    preferred_langs: list = None
+    preferred_langs: Optional[list] = None
 ) -> Tuple[str, dict]:
     """
     Download YouTube subtitles and convert to plain text.

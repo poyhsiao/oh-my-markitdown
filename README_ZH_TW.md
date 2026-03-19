@@ -28,6 +28,7 @@
 - **7 種亞洲語言 OCR**：繁體中文、簡體中文、英文、日文、韓文、泰文、越南文
 - **YouTube 影片轉錄**：下載音訊並使用 **Faster-Whisper** 轉錄（本地處理，無 API 限制！）並支援 **字幕優先策略，速度提升 10-100 倍**
 - **音訊檔案轉錄**：上傳 MP3/WAV/M4A 並轉換為文字
+- **GPU 加速支援**（v0.3.0 新增）：支援 NVIDIA CUDA 和 Apple Silicon MPS，轉錄速度提升 4-10 倍
 - **即時轉換**：上傳檔案並立即取得 Markdown
 - **雙格式輸出**：支援 `markdown` 或 `json` 格式
 - **環境變數**：可設定連接埠、路徑、OCR 語言
@@ -141,6 +142,9 @@ curl http://localhost:51083/api/v1/ocr-languages
 
 # 查看目前設定
 curl http://localhost:51083/api/v1/config
+
+# 查看運算裝置資訊（v0.3.0 新增）
+curl http://localhost:51083/api/v1/device-info
 ```
 
 ---
@@ -307,8 +311,8 @@ MarkItDown 由 Microsoft 開源，遵循 MIT 授權。
 ---
 
 **建立者：** Kimhsiao  
-**最後更新：** 2026-03-17  
-**版本：** 0.3.0  
+**最後更新：** 2026-03-19  
+**版本：** 0.3.1  
 **API 端口：** 51083（可透過 `API_PORT` 環境變數調整）  
 **支援語言：** 繁體中文、簡體中文、英文、日文、韓文、泰文、越南文  
-**新功能：** YouTube 轉錄（字幕優先策略）、音頻轉錄（Faster-Whisper）、系統管理 API
+**新功能：** YouTube 轉錄（字幕優先策略）、音頻轉錄（Faster-Whisper）、GPU 加速支援（CUDA/MPS）、系統管理 API

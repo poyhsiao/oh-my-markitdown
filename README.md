@@ -205,9 +205,11 @@ For detailed configuration examples, see [CONFIG_GUIDE.md](CONFIG_GUIDE.md).
 | `GET` | `/api/v1/formats` | View supported file formats |
 | `GET` | `/api/v1/ocr-languages` | View OCR language support |
 | `GET` | `/api/v1/config` | View current configuration |
+| `GET` | `/api/v1/device-info` | Get compute device info (CPU/GPU) |
 | `POST` | `/api/v1/convert` | Upload file and convert |
 | `POST` | `/api/v1/convert/youtube` | YouTube video transcription (Faster-Whisper) |
 | `POST` | `/api/v1/convert/audio` | Audio file transcription (Faster-Whisper) |
+| `POST` | `/api/v1/convert/video` | Video file transcription (Faster-Whisper) |
 | `GET` | `/api/v1/convert/languages` | Supported transcription languages |
 | `GET` | `/docs` | Swagger UI interactive docs |
 | `GET` | `/redoc` | ReDoc documentation |
@@ -233,6 +235,17 @@ curl -X POST "http://localhost:51083/api/v1/convert" \
 **YouTube transcription:**
 ```bash
 curl -X POST "http://localhost:51083/api/v1/convert/youtube?url=https://www.youtube.com/watch?v=VIDEO_ID&language=zh" \
+  -o transcript.md
+```
+
+**GPU-accelerated transcription (new in v0.3.0):**
+```bash
+# Check available devices
+curl http://localhost:51083/api/v1/device-info
+
+# Use CUDA for faster transcription
+curl -X POST "http://localhost:51083/api/v1/convert/audio?device=cuda" \
+  -F "file=@audio.mp3" \
   -o transcript.md
 ```
 
@@ -400,8 +413,8 @@ For issues, please check:
 ---
 
 **Created by:** Kimhsiao  
-**Last Updated:** 2026-03-17  
-**Version:** 0.3.0  
+**Last Updated:** 2026-03-19  
+**Version:** 0.3.1  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  
 **Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
-**New Features:** YouTube transcription, Audio transcription (Faster-Whisper), System Management API
+**New Features:** YouTube transcription, Audio transcription (Faster-Whisper), GPU Acceleration (CUDA/MPS), System Management API

@@ -491,3 +491,205 @@ class TestCleanupIntegration:
         
         # Default should be dry_run=true for safety
         assert data["dry_run"] is True
+
+
+class TestPerformanceParameters:
+    """Test new performance parameters for transcription endpoints."""
+
+    def test_video_endpoint_has_device_parameter(self):
+        """Test /api/v1/convert/video has device parameter."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        params = sig.parameters
+        
+        assert "device" in params, "Parameter 'device' should exist for GPU/CPU selection"
+        assert "cpu_threads" in params, "Parameter 'cpu_threads' should exist for threading control"
+        assert "vad_enabled" in params, "Parameter 'vad_enabled' should exist for VAD control"
+
+    def test_audio_endpoint_has_device_parameter(self):
+        """Test /api/v1/convert/audio has device parameter."""
+        from api.main import transcribe_audio_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        params = sig.parameters
+        
+        assert "device" in params, "Parameter 'device' should exist for GPU/CPU selection"
+        assert "cpu_threads" in params, "Parameter 'cpu_threads' should exist for threading control"
+        assert "vad_enabled" in params, "Parameter 'vad_enabled' should exist for VAD control"
+
+    def test_youtube_endpoint_has_device_parameter(self):
+        """Test /api/v1/convert/youtube has device parameter."""
+        from api.main import transcribe_youtube
+        import inspect
+        
+        sig = inspect.signature(transcribe_youtube)
+        params = sig.parameters
+        
+        assert "device" in params, "Parameter 'device' should exist for GPU/CPU selection"
+        assert "cpu_threads" in params, "Parameter 'cpu_threads' should exist for threading control"
+        assert "vad_enabled" in params, "Parameter 'vad_enabled' should exist for VAD control"
+
+    def test_convert_url_endpoint_has_device_parameter(self):
+        """Test /api/v1/convert/url has device parameter."""
+        from api.main import convert_url
+        import inspect
+        
+        sig = inspect.signature(convert_url)
+        params = sig.parameters
+        
+        assert "device" in params, "Parameter 'device' should exist for GPU/CPU selection"
+        assert "cpu_threads" in params, "Parameter 'cpu_threads' should exist for threading control"
+        assert "vad_enabled" in params, "Parameter 'vad_enabled' should exist for VAD control"
+
+    def test_device_parameter_is_optional(self):
+        """Test device parameter is optional (defaults to env var)."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        device_param = sig.parameters["device"]
+        
+        # Check that default is None (optional)
+        default = device_param.default
+        if hasattr(default, 'default'):
+            assert default.default is None, "device default should be None (use env var)"
+        else:
+            assert default is None, "device default should be None (use env var)"
+
+
+class TestDeviceInfoEndpoint:
+    """Test device-info endpoint for GPU/CPU detection."""
+
+    @pytest.fixture
+    def client(self):
+        """Create test client."""
+        from api.main import app
+        return TestClient(app)
+
+    def test_device_info_endpoint_exists(self, client):
+        """Test /api/v1/device-info endpoint exists and returns 200."""
+        response = client.get("/api/v1/device-info")
+        
+        assert response.status_code == 200
+
+    def test_device_info_endpoint_success_wrapper(self, client):
+        """Test /api/v1/device-info returns success wrapped response."""
+        response = client.get("/api/v1/device-info")
+        data = response.json()
+        
+        assert data["success"] is True
+        assert "data" in data
+        assert "request_id" in data
+
+    def test_device_info_returns_device(self, client):
+        """Test /api/v1/device-info returns device field."""
+        response = client.get("/api/v1/device-info")
+        data = response.json()
+        
+        assert "device" in data["data"]
+        assert data["data"]["device"] in ["cpu", "cuda", "mps"]
+
+    def test_device_info_returns_cuda_available(self, client):
+        """Test /api/v1/device-info returns cuda_available field."""
+        response = client.get("/api/v1/device-info")
+        data = response.json()
+        
+        assert "cuda_available" in data["data"]
+        assert isinstance(data["data"]["cuda_available"], bool)
+
+    def test_device_info_returns_mps_available(self, client):
+        """Test /api/v1/device-info returns mps_available field."""
+        response = client.get("/api/v1/device-info")
+        data = response.json()
+        
+        assert "mps_available" in data["data"]
+        assert isinstance(data["data"]["mps_available"], bool)
+
+    def test_device_info_returns_cpu_count(self, client):
+        """Test /api/v1/device-info returns cpu_count field."""
+        response = client.get("/api/v1/device-info")
+        data = response.json()
+        
+        assert "cpu_count" in data["data"]
+        assert isinstance(data["data"]["cpu_count"], int)
+        assert data["data"]["cpu_count"] > 0
+
+    def test_device_info_returns_recommended_compute_type(self, client):
+        """Test /api/v1/device-info returns recommended_compute_type field."""
+        response = client.get("/api/v1/device-info")
+        data = response.json()
+        
+        assert "recommended_compute_type" in data["data"]
+        assert data["data"]["recommended_compute_type"] in ["int8", "float16", "float32"]
+
+
+class TestDeviceUtilsFunctions:
+    """Test device utility functions."""
+
+    def test_detect_device_returns_valid_type(self):
+        """Test detect_device returns valid device type."""
+        from api.device_utils import detect_device
+        
+        device = detect_device()
+        assert device in ["cpu", "cuda", "mps"]
+
+    def test_get_device_info_returns_dict(self):
+        """Test get_device_info returns dictionary with required fields."""
+        from api.device_utils import get_device_info
+        
+        info = get_device_info()
+        
+        assert isinstance(info, dict)
+        assert "device" in info
+        assert "cuda_available" in info
+        assert "mps_available" in info
+        assert "cpu_count" in info
+        assert "recommended_compute_type" in info
+
+    def test_validate_device_cpu_always_valid(self):
+        """Test validate_device accepts 'cpu'."""
+        from api.device_utils import validate_device
+        
+        result = validate_device("cpu")
+        assert result == "cpu"
+
+    def test_validate_device_auto_returns_valid(self):
+        """Test validate_device with 'auto' returns valid device."""
+        from api.device_utils import validate_device
+        
+        result = validate_device("auto")
+        assert result in ["cpu", "cuda", "mps"]
+
+    def test_validate_device_invalid_raises(self):
+        """Test validate_device raises for invalid device."""
+        from api.device_utils import validate_device
+        import pytest
+        
+        with pytest.raises(ValueError):
+            validate_device("invalid_device")
+
+    def test_get_recommended_threads_auto_detect(self):
+        """Test get_recommended_threads with auto-detect (0)."""
+        from api.device_utils import get_recommended_threads
+        
+        result = get_recommended_threads(0)  # 0 = auto
+        assert isinstance(result, int)
+        assert result >= 1
+        assert result <= 8  # MAX_CPU_THREADS
+
+    def test_get_recommended_threads_explicit(self):
+        """Test get_recommended_threads with explicit value."""
+        from api.device_utils import get_recommended_threads
+        
+        result = get_recommended_threads(4)
+        assert result == 4
+
+    def test_get_recommended_threads_caps_at_max(self):
+        """Test get_recommended_threads caps at MAX_CPU_THREADS."""
+        from api.device_utils import get_recommended_threads
+        
+        result = get_recommended_threads(100)  # Request more than max
+        assert result <= 8  # Should be capped at MAX_CPU_THREADS

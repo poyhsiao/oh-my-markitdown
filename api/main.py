@@ -9,6 +9,7 @@ import io
 import subprocess
 import re
 from urllib.parse import urlparse
+from typing import Optional
 
 # Validate environment variables on startup
 from .config import validate_environment, ConfigurationError
@@ -112,7 +113,7 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.3.0",
+    version="0.3.1",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -503,6 +504,7 @@ from .whisper_transcribe import (
 )
 from .response import success_response, transcribe_response, ErrorCodes
 from .concurrency import get_concurrency_manager
+from .device_utils import get_device_info
 
 @api_router.post("/convert/youtube")
 async def transcribe_youtube(
@@ -513,7 +515,10 @@ async def transcribe_youtube(
     include_timestamps: bool = Query(False, description="Include timestamps"),
     include_metadata: bool = Query(True, description="Include metadata"),
     prefer_subtitles: bool = Query(True, description="Prefer YouTube subtitles if available (faster)"),
-    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)")
+    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)"),
+    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
+    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
+    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
 ):
     """
     Download YouTube video audio and transcribe using Whisper.
@@ -531,11 +536,19 @@ async def transcribe_youtube(
     - **include_metadata**: Include transcription metadata
     - **prefer_subtitles**: Prefer YouTube subtitles if available (faster, default: true)
     - **fast_mode**: Enable fast mode with optimizations for Whisper path
+    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
+    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
+    - **vad_enabled**: Enable VAD filtering. Default: True.
     
     **Response metadata fields (new in v0.3.0):**
     - **source**: "youtube_subtitles" or "whisper" - indicates transcription source
     - **is_auto_generated**: boolean - whether subtitles are auto-generated (for subtitle source)
     - **processing_time_ms**: integer - processing time in milliseconds
+    
+    **Performance Tips:**
+    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
+    - Use `device=mps` for Apple Silicon (2-4x faster)
+    - Set `cpu_threads=0` for auto-detection of optimal thread count
     """
     
     # Set request ID
@@ -581,6 +594,9 @@ async def transcribe_youtube(
             url=url,
             language=language,
             model_size=model_size,
+            device=device,
+            cpu_threads=cpu_threads,
+            vad_enabled=vad_enabled if vad_enabled is not None else True,
             prefer_subtitles=prefer_subtitles,
             fast_mode=fast_mode
         )
@@ -626,15 +642,27 @@ async def transcribe_audio_file(
     language: str = Query("zh", description="Language code"),
     model_size: str = Query("base", description="Model size"),
     return_format: str = Query("markdown", description="Response format"),
-    include_timestamps: bool = Query(False, description="Include timestamps")
+    include_timestamps: bool = Query(False, description="Include timestamps"),
+    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
+    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
+    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
 ):
     """
     Upload audio file and transcribe using Whisper.
     
     - **file**: Audio file (MP3, WAV, M4A, FLAC, etc.)
     - **language**: Language code
-    - **model_size**: Model size
-    - **return_format**: Response format
+    - **model_size**: Model size (tiny, base, small, medium, large)
+    - **return_format**: Response format (markdown or json)
+    - **include_timestamps**: Include timestamps
+    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
+    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
+    - **vad_enabled**: Enable VAD filtering. Default: True.
+    
+    **Performance Tips:**
+    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
+    - Use `device=mps` for Apple Silicon (2-4x faster)
+    - Set `cpu_threads=0` for auto-detection of optimal thread count
     """
     
     try:
@@ -650,7 +678,10 @@ async def transcribe_audio_file(
             transcript, metadata = transcribe_audio(
                 tmp_path,
                 language=language,
-                model_size=model_size
+                model_size=model_size,
+                device=device,
+                cpu_threads=cpu_threads,
+                vad_enabled=vad_enabled if vad_enabled is not None else True
             )
             
             # Format
@@ -696,16 +727,27 @@ async def transcribe_video_file(
     language: str = Query("auto", description="Language code (auto=auto-detect)"),
     model_size: str = Query("base", description="Model size"),
     output_formats: str = Query("markdown", description="Output formats (comma-separated, e.g.: markdown,srt,vtt)"),
-    include_timestamps: bool = Query(False, description="Include timestamps in Markdown")
+    include_timestamps: bool = Query(False, description="Include timestamps in Markdown"),
+    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
+    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
+    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
 ):
     """
     Upload video file and transcribe using Whisper.
     
     - **file**: Video file (MP4, MKV, WebM, AVI, MOV, FLV, TS)
     - **language**: Language code
-    - **model_size**: Model size
+    - **model_size**: Model size (tiny, base, small, medium, large)
     - **output_formats**: Output formats (comma-separated, e.g.: markdown,srt,vtt)
     - **include_timestamps**: Include timestamps in Markdown
+    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
+    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
+    - **vad_enabled**: Enable VAD filtering. Default: True.
+    
+    **Performance Tips:**
+    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
+    - Use `device=mps` for Apple Silicon (2-4x faster)
+    - Set `cpu_threads=0` for auto-detection of optimal thread count
     """
     
     # Validate video file type
@@ -738,6 +780,9 @@ async def transcribe_video_file(
                 audio_path,
                 language=language,
                 model_size=model_size,
+                device=device,
+                cpu_threads=cpu_threads,
+                vad_enabled=vad_enabled if vad_enabled is not None else True,
                 output_formats=output_formats,
                 include_timestamps=include_timestamps
             )
@@ -833,7 +878,7 @@ async def get_config():
     """Get current API configuration (sensitive info hidden)."""
     return {
         "api": {
-            "version": "0.3.0",
+            "version": "0.3.1",
             "debug": API_DEBUG,
             "max_upload_size": MAX_UPLOAD_SIZE,
             "max_upload_size_mb": MAX_UPLOAD_SIZE // 1024 // 1024,
@@ -849,6 +894,30 @@ async def get_config():
             "base_url": OPENAI_BASE_URL if OPENAI_API_KEY else "N/A",
         }
     }
+
+
+@api_router.get("/device-info")
+async def get_device_info_endpoint():
+    """
+    Get compute device information for Whisper transcription.
+    
+    Returns information about:
+    - **device**: Detected device (cpu, cuda, or mps)
+    - **cuda_available**: Whether NVIDIA CUDA is available
+    - **mps_available**: Whether Apple Silicon MPS is available
+    - **cpu_count**: Number of CPU cores
+    - **recommended_compute_type**: Recommended compute type for the device
+    - **cuda_device_name**: GPU name (if CUDA available)
+    - **cuda_device_count**: Number of CUDA devices
+    - **cuda_memory_gb**: GPU memory in GB (if CUDA available)
+    
+    This endpoint helps users understand what compute resources are available
+    and choose the optimal device for transcription.
+    """
+    from .response import success_response
+    
+    device_info = get_device_info()
+    return success_response(data=device_info)
 
 
 # ===== Languages Endpoints (Spec-compliant) =====
@@ -968,7 +1037,10 @@ async def convert_url(
     model_size: str = Query("base", description="Whisper model size"),
     ocr_lang: str = Query(DEFAULT_OCR_LANG, description="OCR language"),
     output_formats: str = Query("markdown", description="Output formats (comma-separated)"),
-    include_timestamps: bool = Query(False, description="Include timestamps in Markdown")
+    include_timestamps: bool = Query(False, description="Include timestamps in Markdown"),
+    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
+    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
+    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
 ):
     """
     Unified URL endpoint - auto-detects URL type and processes accordingly.
@@ -980,6 +1052,9 @@ async def convert_url(
     - **ocr_lang**: OCR language (default: environment variable DEFAULT_OCR_LANG)
     - **output_formats**: Output formats (comma-separated, e.g.: markdown,srt,vtt)
     - **include_timestamps**: Include timestamps in Markdown
+    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
+    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
+    - **vad_enabled**: Enable VAD filtering. Default: True.
     
     Supported types:
     - youtube: YouTube video transcription
@@ -987,6 +1062,11 @@ async def convert_url(
     - audio: Audio file transcription
     - video: Video file transcription
     - webpage: Webpage content conversion
+    
+    **Performance Tips:**
+    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
+    - Use `device=mps` for Apple Silicon (2-4x faster)
+    - Set `cpu_threads=0` for auto-detection of optimal thread count
     """
     
     # Set request ID
@@ -1001,7 +1081,10 @@ async def convert_url(
             result = transcribe_youtube_video(
                 url=url,
                 language=language if language != "auto" else None,
-                model_size=model_size
+                model_size=model_size,
+                device=device,
+                cpu_threads=cpu_threads,
+                vad_enabled=vad_enabled if vad_enabled is not None else True
             )
             
             # Format output
@@ -1013,8 +1096,7 @@ async def convert_url(
                 title=result["title"],
                 transcript=result["transcript"],
                 metadata=result["metadata"],
-                include_metadata=True,
-                include_timestamps=include_timestamps
+                include_metadata=True
             )
             formats_dict["markdown"] = markdown_content
             
@@ -1152,15 +1234,17 @@ async def convert_url(
                     transcript, metadata = transcribe_audio(
                         audio_path,
                         language=language if language != "auto" else None,
-                        model_size=model_size
+                        model_size=model_size,
+                        device=device,
+                        cpu_threads=cpu_threads,
+                        vad_enabled=vad_enabled if vad_enabled is not None else True
                     )
                     
                     markdown_content = format_transcript_as_markdown(
                         title=filename,
                         transcript=transcript,
                         metadata=metadata,
-                        include_metadata=True,
-                        include_timestamps=include_timestamps
+                        include_metadata=True
                     )
                     
                     formats_dict = {"markdown": markdown_content}
@@ -1170,6 +1254,9 @@ async def convert_url(
                         audio_path,
                         language=language if language != "auto" else None,
                         model_size=model_size,
+                        device=device,
+                        cpu_threads=cpu_threads,
+                        vad_enabled=vad_enabled if vad_enabled is not None else True,
                         output_formats=output_formats,
                         include_timestamps=include_timestamps
                     )
@@ -1224,6 +1311,9 @@ async def convert_url(
                     audio_path,
                     language=language if language != "auto" else None,
                     model_size=model_size,
+                    device=device,
+                    cpu_threads=cpu_threads,
+                    vad_enabled=vad_enabled if vad_enabled is not None else True,
                     output_formats=output_formats,
                     include_timestamps=include_timestamps
                 )

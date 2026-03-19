@@ -152,7 +152,8 @@ def format_timestamp_readable(seconds: float) -> str:
 
 def format_multiline_output(
     segments: List[Dict],
-    output_format: str = "markdown"
+    output_format: str = "markdown",
+    include_timestamps: bool = False
 ) -> Dict[str, str]:
     """
     Generate multiple output formats from segments.
@@ -160,6 +161,7 @@ def format_multiline_output(
     Args:
         segments: List of segments with 'start', 'end', 'text' keys
         output_format: Comma-separated list of formats (markdown,srt,vtt)
+        include_timestamps: Whether to include timestamps in Markdown output
         
     Returns:
         Dictionary mapping format names to formatted strings
@@ -168,7 +170,7 @@ def format_multiline_output(
     result = {}
     
     if "markdown" in formats or "md" in formats:
-        result["markdown"] = format_transcript_with_timestamps(segments, True)
+        result["markdown"] = format_transcript_with_timestamps(segments, include_timestamps)
     
     if "srt" in formats:
         result["srt"] = format_segments_as_srt(segments)
