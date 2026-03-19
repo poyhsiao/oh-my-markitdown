@@ -414,7 +414,7 @@ For issues, please check:
 
 **Created by:** Kimhsiao  
 **Last Updated:** 2026-03-19  
-**Version:** 0.3.1  
+**Version:** 0.4.0  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  
 **Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
-**New Features:** YouTube transcription, Audio transcription (Faster-Whisper), GPU Acceleration (CUDA/MPS), System Management API
+**New Features:** YouTube transcription, Audio transcription (Faster-Whisper), GPU Acceleration (CUDA/MPS), System Management API, SDK Migration (native Python APIs)

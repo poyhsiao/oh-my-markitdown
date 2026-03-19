@@ -1,4 +1,7 @@
-"""Tests for YouTube subtitle extraction functions."""
+"""Tests for YouTube subtitle extraction functions.
+
+Updated to mock new SDK modules instead of subprocess calls.
+"""
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock, call
@@ -9,20 +12,22 @@ import os
 class TestCheckAvailableSubtitles:
     """Test check_available_subtitles function."""
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_has_manual_subtitles(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_has_manual_subtitles(self, mock_get_client):
         """Test detection of manually uploaded subtitles."""
         from api.whisper_transcribe import check_available_subtitles
+        from api.youtube_client import SubtitleInfo, SubtitleTrack
 
-        # Mock yt-dlp output with manual subtitles
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = """
-Available subtitles:
-zh-Hant    Traditional Chinese
-en         English
-"""
-        mock_run.return_value = mock_result
+        # Mock YouTube client
+        mock_client = Mock()
+        mock_client.list_subtitles.return_value = SubtitleInfo(
+            manual=[
+                SubtitleTrack(lang="zh-Hant", name="Traditional Chinese"),
+                SubtitleTrack(lang="en", name="English"),
+            ],
+            auto=[],
+        )
+        mock_get_client.return_value = mock_client
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
@@ -31,20 +36,22 @@ en         English
         assert "zh-Hant" in result["available_langs"]
         assert "en" in result["available_langs"]
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_has_auto_subtitles(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_has_auto_subtitles(self, mock_get_client):
         """Test detection of auto-generated subtitles."""
         from api.whisper_transcribe import check_available_subtitles
+        from api.youtube_client import SubtitleInfo, SubtitleTrack
 
-        # Mock yt-dlp output with auto-generated subtitles
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = """
-Available automatic captions:
-zh-Hant    Traditional Chinese (auto-generated)
-en         English (auto-generated)
-"""
-        mock_run.return_value = mock_result
+        # Mock YouTube client
+        mock_client = Mock()
+        mock_client.list_subtitles.return_value = SubtitleInfo(
+            manual=[],
+            auto=[
+                SubtitleTrack(lang="zh-Hant", name="Traditional Chinese", is_auto=True),
+                SubtitleTrack(lang="en", name="English", is_auto=True),
+            ],
+        )
+        mock_get_client.return_value = mock_client
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
@@ -52,15 +59,16 @@ en         English (auto-generated)
         assert result["has_auto"] is True
         assert len(result["available_langs"]) > 0
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_no_subtitles(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_no_subtitles(self, mock_get_client):
         """Test video with no subtitles."""
         from api.whisper_transcribe import check_available_subtitles
+        from api.youtube_client import SubtitleInfo
 
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "No subtitles available for this video."
-        mock_run.return_value = mock_result
+        # Mock YouTube client with no subtitles
+        mock_client = Mock()
+        mock_client.list_subtitles.return_value = SubtitleInfo()
+        mock_get_client.return_value = mock_client
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
@@ -69,83 +77,88 @@ en         English (auto-generated)
         assert result["available_langs"] == []
         assert result["recommended_lang"] is None
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_language_priority(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_language_priority(self, mock_get_client):
         """Test language priority selection."""
         from api.whisper_transcribe import check_available_subtitles
+        from api.youtube_client import SubtitleInfo, SubtitleTrack
 
         # Mock with multiple languages
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = """
-Available subtitles:
-en         English
-zh-Hant    Traditional Chinese
-ja         Japanese
-"""
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.list_subtitles.return_value = SubtitleInfo(
+            manual=[
+                SubtitleTrack(lang="en", name="English"),
+                SubtitleTrack(lang="zh-Hant", name="Traditional Chinese"),
+                SubtitleTrack(lang="ja", name="Japanese"),
+            ],
+            auto=[],
+        )
+        mock_get_client.return_value = mock_client
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
         # zh-Hant should be recommended (highest priority that's available)
         assert result["recommended_lang"] == "zh-Hant"
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_fallback_to_first_available(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_fallback_to_first_available(self, mock_get_client):
         """Test fallback to first available when no priority match."""
         from api.whisper_transcribe import check_available_subtitles
+        from api.youtube_client import SubtitleInfo, SubtitleTrack
 
         # Mock with languages not in priority list
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = """
-Available subtitles:
-es         Spanish
-fr         French
-"""
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.list_subtitles.return_value = SubtitleInfo(
+            manual=[
+                SubtitleTrack(lang="es", name="Spanish"),
+                SubtitleTrack(lang="fr", name="French"),
+            ],
+            auto=[],
+        )
+        mock_get_client.return_value = mock_client
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
         # Should fallback to first available
         assert result["recommended_lang"] == "es"
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_timeout_handling(self, mock_run):
-        """Test handling of timeout errors."""
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_exception_handling(self, mock_get_client):
+        """Test handling of exceptions."""
         from api.whisper_transcribe import check_available_subtitles
-        import subprocess
 
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="yt-dlp", timeout=30)
+        # Mock client raising exception
+        mock_get_client.side_effect = Exception("Network error")
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
-        # Should return empty result on timeout
+        # Should return empty result on exception
         assert result["has_manual"] is False
         assert result["has_auto"] is False
         assert result["available_langs"] == []
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_both_manual_and_auto_subtitles(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_both_manual_and_auto_subtitles(self, mock_get_client):
         """Test when video has both manual and auto subtitles."""
         from api.whisper_transcribe import check_available_subtitles
+        from api.youtube_client import SubtitleInfo, SubtitleTrack
 
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = """
-Available subtitles:
-zh-Hant    Traditional Chinese
-
-Available automatic captions:
-en         English (auto-generated)
-"""
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.list_subtitles.return_value = SubtitleInfo(
+            manual=[
+                SubtitleTrack(lang="zh-Hant", name="Traditional Chinese"),
+            ],
+            auto=[
+                SubtitleTrack(lang="en", name="English", is_auto=True),
+            ],
+        )
+        mock_get_client.return_value = mock_client
 
         result = check_available_subtitles("https://youtube.com/watch?v=test")
 
         assert result["has_manual"] is True
         assert result["has_auto"] is True
-        # Manual subtitles should be prioritized in the list
+        # Manual subtitles should be prioritized
         assert result["recommended_lang"] == "zh-Hant"
 
 
@@ -302,7 +315,6 @@ class TestTranscribeYouTubeVideo:
         # Verify subtitle functions were called
         mock_check.assert_called_once()
         mock_download.assert_called_once()
-        # Whisper functions should NOT be called
         mock_title.assert_called_once()
 
     @patch('api.whisper_transcribe.transcribe_audio')
@@ -375,7 +387,6 @@ class TestTranscribeYouTubeVideo:
         assert result["success"] is True
         assert result["metadata"]["source"] == "whisper"
         
-        # When prefer_subtitles=False, check_available_subtitles should NOT be called
         mock_download_audio.assert_called_once()
         mock_transcribe.assert_called_once()
 
@@ -469,56 +480,53 @@ class TestTranscribeYouTubeVideo:
 
 
 class TestDownloadYoutubeAudio:
-    """Test download_youtube_audio function."""
+    """Test download_youtube_audio function with SDK."""
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_default_audio_quality(self, mock_run):
-        """Test default audio quality is 128K."""
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_default_audio_quality(self, mock_get_client):
+        """Test download with default audio quality (128K)."""
         from api.whisper_transcribe import download_youtube_audio
 
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Test Title|||test123"
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.download_audio.return_value = ("/tmp/test123.mp3", "Test Video")
+        mock_get_client.return_value = mock_client
 
-        with patch('api.whisper_transcribe.os.path.exists', return_value=True):
-            download_youtube_audio("https://youtube.com/watch?v=test")
+        path, title = download_youtube_audio("https://youtube.com/watch?v=test")
 
-        # Verify audio-quality parameter
-        call_args = mock_run.call_args_list[1]
-        assert "--audio-quality" in call_args[0][0]
-        idx = call_args[0][0].index("--audio-quality")
-        assert call_args[0][0][idx + 1] == "128K"
+        assert title == "Test Video"
+        assert "test123.mp3" in path
+        mock_client.download_audio.assert_called_once_with(
+            "https://youtube.com/watch?v=test", "/tmp", "128K"
+        )
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_low_quality_audio(self, mock_run):
-        """Test low quality audio for fast mode."""
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_low_quality_audio(self, mock_get_client):
+        """Test download with low quality audio for fast mode."""
         from api.whisper_transcribe import download_youtube_audio
 
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Test Title|||test123"
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.download_audio.return_value = ("/tmp/test123.mp3", "Test Video")
+        mock_get_client.return_value = mock_client
 
-        download_youtube_audio("https://youtube.com/watch?v=test", audio_quality="64K")
+        path, title = download_youtube_audio(
+            "https://youtube.com/watch?v=test", 
+            audio_quality="64K"
+        )
 
-        # Verify audio-quality parameter
-        call_args = mock_run.call_args_list[1]
-        idx = call_args[0][0].index("--audio-quality")
-        assert call_args[0][0][idx + 1] == "64K"
+        mock_client.download_audio.assert_called_once_with(
+            "https://youtube.com/watch?v=test", "/tmp", "64K"
+        )
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_returns_title_and_path(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_returns_title_and_path(self, mock_get_client):
         """Test function returns title and audio path."""
         from api.whisper_transcribe import download_youtube_audio
 
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "My Video Title|||abc123"
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.download_audio.return_value = ("/tmp/abc123.mp3", "My Video Title")
+        mock_get_client.return_value = mock_client
 
-        with patch('api.whisper_transcribe.os.path.exists', return_value=True):
-            path, title = download_youtube_audio("https://youtube.com/watch?v=test")
+        path, title = download_youtube_audio("https://youtube.com/watch?v=test")
 
         assert title == "My Video Title"
         assert "abc123.mp3" in path
@@ -623,41 +631,45 @@ class TestFormatTranscriptAsMarkdown:
 
 
 class TestGetVideoTitle:
-    """Test _get_video_title function."""
+    """Test _get_video_title function with SDK."""
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_returns_title_on_success(self, mock_run):
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_returns_title_on_success(self, mock_get_client):
         """Test successful title retrieval."""
         from api.whisper_transcribe import _get_video_title
+        from api.youtube_client import VideoInfo
 
-        mock_result = Mock()
-        mock_result.returncode = 0
-        mock_result.stdout = "My Awesome Video\n"
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.get_video_info.return_value = VideoInfo(
+            id="test123",
+            title="My Awesome Video",
+        )
+        mock_get_client.return_value = mock_client
 
         title = _get_video_title("https://youtube.com/watch?v=test")
 
         assert title == "My Awesome Video"
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_returns_unknown_on_failure(self, mock_run):
-        """Test returns 'Unknown' on failure."""
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_returns_unknown_on_failure(self, mock_get_client):
+        """Test returns 'Unknown' on YouTubeClientError."""
         from api.whisper_transcribe import _get_video_title
+        from api.youtube_client import YouTubeClientError
 
-        mock_result = Mock()
-        mock_result.returncode = 1
-        mock_run.return_value = mock_result
+        mock_client = Mock()
+        mock_client.get_video_info.side_effect = YouTubeClientError("Video not found")
+        mock_get_client.return_value = mock_client
 
         title = _get_video_title("https://youtube.com/watch?v=test")
 
         assert title == "Unknown"
 
-    @patch('api.whisper_transcribe.subprocess.run')
-    def test_returns_unknown_on_exception(self, mock_run):
-        """Test returns 'Unknown' on exception."""
+    @patch('api.whisper_transcribe._get_youtube_client')
+    def test_returns_unknown_on_exception(self, mock_get_client):
+        """Test returns 'Unknown' on generic exception."""
         from api.whisper_transcribe import _get_video_title
 
-        mock_run.side_effect = Exception("Network error")
+        mock_get_client.side_effect = Exception("Network error")
 
         title = _get_video_title("https://youtube.com/watch?v=test")
 

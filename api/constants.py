@@ -23,6 +23,9 @@ OCR_LANGUAGES = {
     "vie": "越南文",
 }
 
+# Default OCR language
+DEFAULT_OCR_LANG = "chi_tra+eng"
+
 # Whisper transcription languages
 SUPPORTED_LANGUAGES = {
     "zh": "中文",

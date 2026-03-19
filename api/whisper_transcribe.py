@@ -5,7 +5,6 @@ Use Faster-Whisper for local speech-to-text
 
 import os
 import tempfile
-import subprocess
 import time
 from pathlib import Path
 from typing import Optional, Tuple, Dict, List
@@ -13,6 +12,10 @@ from faster_whisper import WhisperModel
 
 from .constants import WHISPER_MODEL_CACHE_SIZE, DEFAULT_YOUTUBE_INFO_TIMEOUT, DEFAULT_YOUTUBE_DOWNLOAD_TIMEOUT, DEFAULT_AUDIO_EXTRACT_TIMEOUT, SUBTITLE_LANG_PRIORITY, SUBTITLE_DOWNLOAD_TIMEOUT, MODEL_SELECTION_THRESHOLDS, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, AUDIO_CODEC, AUDIO_FFMPEG_THREADS, DEFAULT_VAD_MIN_SILENCE_MS, DEFAULT_VAD_THRESHOLD, DEFAULT_VAD_SPEECH_PAD_MS, DEFAULT_CPU_THREADS
 from .subtitles import format_multiline_output, format_transcript_with_timestamps
+
+# Import new SDK modules
+from .youtube_client import YouTubeClient, YouTubeClientError
+from .audio_extractor import extract_audio_from_video as _extract_audio_sdk
 
 # Read configuration from environment variables
 DEFAULT_MODEL = os.getenv("WHISPER_MODEL", "base")
@@ -267,13 +270,29 @@ def transcribe_with_timestamps(
     return " ".join(transcript_lines), segments_list
 
 
+# Global YouTube client instance
+_youtube_client: Optional[YouTubeClient] = None
+
+
+def _get_youtube_client() -> YouTubeClient:
+    """Get or create YouTube client instance."""
+    global _youtube_client
+    if _youtube_client is None:
+        _youtube_client = YouTubeClient(
+            timeout=YOUTUBE_INFO_TIMEOUT,
+            download_timeout=YOUTUBE_DOWNLOAD_TIMEOUT,
+            subtitle_timeout=SUBTITLE_DOWNLOAD_TIMEOUT,
+        )
+    return _youtube_client
+
+
 def download_youtube_audio(
     url: str, 
     output_dir: str = "/tmp",
     audio_quality: str = "128K"
 ) -> Tuple[str, str]:
     """
-    Download audio from YouTube video
+    Download audio from YouTube video using yt-dlp SDK.
     
     Args:
         url: YouTube URL
@@ -282,42 +301,12 @@ def download_youtube_audio(
     
     Returns:
         (audio file path, video title)
+    
+    Raises:
+        YouTubeClientError: Download failed
     """
-    result = subprocess.run(
-        ["yt-dlp", "--no-check-certificate", "--print", "%(title)s|||%(id)s", url],
-        capture_output=True,
-        text=True,
-        timeout=YOUTUBE_INFO_TIMEOUT
-    )
-    
-    if result.returncode != 0:
-        raise Exception(f"Failed to get YouTube info: {result.stderr}")
-    
-    parts = result.stdout.strip().split("|||")
-    title = parts[0] if len(parts) > 0 else "Unknown"
-    video_id = parts[1] if len(parts) > 1 else "unknown"
-    
-    output_path = os.path.join(output_dir, f"{video_id}.mp3")
-    
-    result = subprocess.run(
-        [
-            "yt-dlp", 
-            "--no-check-certificate", 
-            "-x", 
-            "--audio-format", "mp3",
-            "--audio-quality", audio_quality,
-            "-o", output_path, 
-            url
-        ],
-        capture_output=True,
-        text=True,
-        timeout=YOUTUBE_DOWNLOAD_TIMEOUT
-    )
-    
-    if result.returncode != 0:
-        raise Exception(f"Failed to download YouTube audio: {result.stderr}")
-    
-    return output_path, title
+    client = _get_youtube_client()
+    return client.download_audio(url, output_dir, audio_quality)
 
 
 def transcribe_youtube_video(
@@ -426,19 +415,15 @@ def transcribe_youtube_video(
 
 
 def _get_video_title(url: str) -> str:
-    """Get YouTube video title without downloading."""
+    """Get YouTube video title using yt-dlp SDK."""
     try:
-        proc = subprocess.run(
-            ["yt-dlp", "--no-check-certificate", "--print", "%(title)s", url],
-            capture_output=True,
-            text=True,
-            timeout=YOUTUBE_INFO_TIMEOUT
-        )
-        if proc.returncode == 0:
-            return proc.stdout.strip()
-    except:
-        pass
-    return "Unknown"
+        client = _get_youtube_client()
+        info = client.get_video_info(url)
+        return info.title
+    except YouTubeClientError:
+        return "Unknown"
+    except Exception:
+        return "Unknown"
 
 
 def format_transcript_as_markdown(
@@ -578,7 +563,7 @@ def extract_audio_from_video(
     threads: int = AUDIO_FFMPEG_THREADS
 ) -> str:
     """
-    Extract audio from video file.
+    Extract audio from video file using ffmpeg-python SDK.
     
     Optimizations:
     - WAV/PCM format (no compression overhead)
@@ -594,38 +579,22 @@ def extract_audio_from_video(
     Returns:
         Path to extracted audio file
     """
-    if output_audio_path is None:
-        output_audio_path = tempfile.mktemp(suffix=".wav")
-    
-    cmd = [
-        "ffmpeg",
-        "-threads", str(threads),     # Multi-threaded decoding
-        "-i", video_path,
-        "-vn",                        # No video
-        "-ac", str(AUDIO_CHANNELS),   # Mono
-        "-ar", str(AUDIO_SAMPLE_RATE),# 16kHz
-        "-acodec", AUDIO_CODEC,       # WAV/PCM
-        "-y", output_audio_path
-    ]
-    
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=AUDIO_EXTRACT_TIMEOUT
+    return _extract_audio_sdk(
+        video_path,
+        output_audio_path,
+        sample_rate=AUDIO_SAMPLE_RATE,
+        channels=AUDIO_CHANNELS,
+        codec=AUDIO_CODEC,
+        threads=threads,
+        timeout=AUDIO_EXTRACT_TIMEOUT,
     )
-    
-    if result.returncode != 0:
-        raise RuntimeError(f"Audio extraction failed: {result.stderr}")
-    
-    return output_audio_path
 
 
 # ==================== YouTube Subtitle Functions ====================
 
 def check_available_subtitles(url: str) -> dict:
     """
-    Check available YouTube subtitles for a video.
+    Check available YouTube subtitles for a video using yt-dlp SDK.
     
     Returns:
         {
@@ -643,58 +612,27 @@ def check_available_subtitles(url: str) -> dict:
     }
     
     try:
-        proc = subprocess.run(
-            ["yt-dlp", "--list-subs", "--no-download", "--no-check-certificate", url],
-            capture_output=True,
-            text=True,
-            timeout=YOUTUBE_INFO_TIMEOUT
-        )
+        client = _get_youtube_client()
+        subtitle_info = client.list_subtitles(url)
         
-        if proc.returncode != 0:
-            return result
+        result["has_manual"] = len(subtitle_info.manual) > 0
+        result["has_auto"] = len(subtitle_info.auto) > 0
         
-        output = proc.stdout
-        lines = output.split('\n')
-        
-        manual_langs = []
-        auto_langs = []
-        
-        current_section = None
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            if 'Available subtitles' in line:
-                current_section = 'manual'
-                result["has_manual"] = True
-            elif 'Available automatic captions' in line or 'Automatic captions' in line:
-                current_section = 'auto'
-                result["has_auto"] = True
-            elif current_section and line[0:2].isalpha():
-                lang_code = line.split()[0] if line.split() else None
-                if lang_code and len(lang_code) <= 10:
-                    if current_section == 'manual':
-                        manual_langs.append(lang_code)
-                    else:
-                        auto_langs.append(lang_code)
-        
-        # Prioritize manual subtitles over auto
-        result["available_langs"] = manual_langs + auto_langs
+        # Get all available languages
+        all_langs = list(subtitle_info.available_langs)
+        result["available_langs"] = all_langs
         
         # Find recommended language based on priority
         for lang in SUBTITLE_LANG_PRIORITY:
-            if lang in result["available_langs"]:
+            if lang in all_langs:
                 result["recommended_lang"] = lang
                 break
         
-        if not result["recommended_lang"] and result["available_langs"]:
-            result["recommended_lang"] = result["available_langs"][0]
+        if not result["recommended_lang"] and all_langs:
+            result["recommended_lang"] = all_langs[0]
         
         return result
         
-    except subprocess.TimeoutExpired:
-        return result
     except Exception:
         return result
 
@@ -705,7 +643,7 @@ def download_and_convert_subtitles(
     preferred_langs: Optional[list] = None
 ) -> Tuple[str, dict]:
     """
-    Download YouTube subtitles and convert to plain text.
+    Download YouTube subtitles and convert to plain text using yt-dlp SDK.
     
     Args:
         url: YouTube URL
@@ -718,7 +656,7 @@ def download_and_convert_subtitles(
     import shutil
     
     if preferred_langs is None:
-        preferred_langs = SUBTITLE_LANG_PRIORITY
+        preferred_langs = list(SUBTITLE_LANG_PRIORITY)
     
     temp_dir = os.path.join(output_dir, f"subs_{os.getpid()}")
     os.makedirs(temp_dir, exist_ok=True)
@@ -731,22 +669,14 @@ def download_and_convert_subtitles(
     }
     
     try:
-        # Get video info first
-        info_proc = subprocess.run(
-            ["yt-dlp", "--dump-json", "--no-download", "--no-check-certificate", url],
-            capture_output=True,
-            text=True,
-            timeout=YOUTUBE_INFO_TIMEOUT
-        )
+        client = _get_youtube_client()
         
-        video_duration = None
-        if info_proc.returncode == 0:
-            try:
-                import json
-                info = json.loads(info_proc.stdout)
-                video_duration = info.get("duration")
-            except:
-                pass
+        # Get video info for duration
+        try:
+            info = client.get_video_info(url)
+            metadata["duration"] = info.duration
+        except Exception:
+            pass
         
         # Check available subtitles
         sub_info = check_available_subtitles(url)
@@ -754,59 +684,32 @@ def download_and_convert_subtitles(
         if not sub_info["available_langs"]:
             raise Exception("No subtitles available for this video")
         
-        # Determine which language to download
-        target_lang = None
-        for lang in preferred_langs:
-            if lang in sub_info["available_langs"]:
-                target_lang = lang
-                break
-        
-        if not target_lang:
-            target_lang = sub_info["recommended_lang"]
-        
-        if not target_lang:
-            raise Exception("Could not determine subtitle language")
-        
-        # Download subtitles
-        output_template = os.path.join(temp_dir, "%(id)s.%(ext)s")
-        
-        proc = subprocess.run(
-            [
-                "yt-dlp",
-                "--write-subs",
-                "--write-auto-subs",
-                "--sub-lang", target_lang,
-                "--skip-download",
-                "--sub-format", "vtt",
-                "--convert-subs", "vtt",
-                "-o", output_template,
-                "--no-check-certificate",
-                url
-            ],
-            capture_output=True,
-            text=True,
-            timeout=SUBTITLE_DOWNLOAD_TIMEOUT
+        # Download best available subtitles
+        vtt_path = client.get_best_subtitles(
+            url=url,
+            preferred_langs=preferred_langs,
+            output_dir=temp_dir,
         )
         
-        if proc.returncode != 0:
-            raise Exception(f"Failed to download subtitles: {proc.stderr}")
-        
-        # Find downloaded VTT file
-        vtt_files = list(Path(temp_dir).glob("*.vtt"))
-        
-        if not vtt_files:
-            raise Exception("No subtitle files found after download")
-        
-        # Use the first matching VTT file
-        vtt_file = vtt_files[0]
+        if not vtt_path:
+            raise Exception("Failed to download subtitles")
         
         # Parse VTT and convert to plain text
-        transcript = _parse_vtt_to_text(str(vtt_file))
+        transcript = _parse_vtt_to_text(vtt_path)
         
-        # Set metadata
-        metadata["language"] = target_lang
-        metadata["is_auto_generated"] = target_lang not in (sub_info["available_langs"][:len([l for l in sub_info["available_langs"] if sub_info["has_manual"]])]) if sub_info["has_manual"] else True
-        metadata["duration"] = video_duration
+        # Determine if auto-generated
+        # Check if the downloaded language was in manual or auto list
+        subtitle_info = client.list_subtitles(url)
+        manual_langs = {t.lang for t in subtitle_info.manual}
+        
+        # Get the language from the VTT filename (format: {video_id}.{lang}.vtt)
+        import os
+        vtt_filename = os.path.basename(vtt_path)
+        parts = vtt_filename.replace('.vtt', '').split('.')
+        downloaded_lang = parts[-1] if len(parts) > 1 else None
+        
+        metadata["language"] = downloaded_lang
+        metadata["is_auto_generated"] = downloaded_lang not in manual_langs if downloaded_lang else True
         
         return transcript, metadata
         

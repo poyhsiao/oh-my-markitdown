@@ -16,8 +16,31 @@ __pycache__/
 *$py.class
 *.so
 .Python
-*.egg-info/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
 .eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# === uv 相關 ===
+.uv/
+.uv-cache/
 
 # API
 api/__pycache__/
@@ -38,5 +61,36 @@ api/__pycache__/
 .env.local
 .env.*.local
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+
 # Worktrees
 .worktrees/
+
+# Development plans (local only)
+# docs/plans/
+
+# Data directory
+data/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp

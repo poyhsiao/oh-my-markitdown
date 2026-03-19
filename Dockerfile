@@ -48,42 +48,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# 安裝 Python 依賴
-# 參考官方 pyproject.toml 的 all 依賴組
-RUN pip install --no-cache-dir \
-    # MarkItDown 與所有可選依賴
-    'markitdown[all]' \
-    \
-    # OCR 插件
-    markitdown-ocr \
-    \
-    # FastAPI 和相關依賴
-    fastapi \
-    uvicorn \
-    python-multipart \
-    aiofiles \
-    \
-    # OpenAI（可選，用於高品質 OCR）
-    openai \
-    \
-    # Azure Document Intelligence（可選）
-    azure-ai-documentintelligence \
-    azure-identity \
-    \
-    # Faster-Whisper（本地 STT，比 Whisper 快 2-4 倍）
-    faster-whisper \
-    psutil \
-    \
-    # YouTube 下載工具（最新版本）
-    yt-dlp \
-    \
-    # Testing dependencies
-    pytest \
-    pytest-asyncio
+# 安裝 uv（Python 套件管理器）
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# 複製依賴定義文件
+COPY pyproject.toml uv.lock* README.md ./
+
+# 使用 uv 安裝 Python 依賴
+RUN uv sync --frozen --no-dev
 
 # Pre-download Whisper base model (per spec Section 2.3)
 # This ensures the model is available on first run without download delay
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
+RUN uv run python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
 
 # 創建目錄結構
 RUN mkdir -p /app/input /app/output /app/data /app/api
@@ -102,6 +78,9 @@ COPY api/concurrency.py /app/api/concurrency.py
 COPY api/subtitles.py /app/api/subtitles.py
 COPY api/ip_whitelist.py /app/api/ip_whitelist.py
 COPY api/youtube_grabber.py /app/api/youtube_grabber.py
+COPY api/youtube_client.py /app/api/youtube_client.py
+COPY api/audio_extractor.py /app/api/audio_extractor.py
+COPY api/ocr_client.py /app/api/ocr_client.py
 
 # 複製自動轉換腳本
 COPY api/auto_convert.py /app/api/auto_convert.py
@@ -125,5 +104,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# 預設啟動 API 服務
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# 預設啟動 API 服務 (使用 uv run 執行虛擬環境中的命令)
+CMD ["uv", "run", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]

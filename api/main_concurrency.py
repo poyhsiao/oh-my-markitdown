@@ -3,6 +3,59 @@ Modified version of main.py with concurrency control integration.
 This shows how to integrate ConcurrencyManager into API endpoints.
 """
 
+from fastapi import File, UploadFile, HTTPException, Query
+from fastapi.responses import Response, JSONResponse
+from markitdown import MarkItDown
+import tempfile
+import os
+from pathlib import Path
+from datetime import datetime
+import uuid
+
+# Import configuration
+from .config import validate_environment, ConfigurationError
+
+# Import unified response format and error codes
+from .response import (
+    error_response, 
+    ErrorCodes, 
+    set_request_id,
+    convert_file_response
+)
+
+# Import concurrency manager
+from .concurrency import get_concurrency_manager
+
+# Import OCR client module
+from .ocr_client import ocr_image, ocr_pdf, OCRError
+
+# Validate environment and load config
+try:
+    _config = validate_environment()
+except ConfigurationError as e:
+    print(f"Configuration error: {e}")
+    raise SystemExit(1)
+
+# Read configuration from config object
+API_DEBUG = _config.api.debug
+DEFAULT_OCR_LANG = _config.ocr.default_lang
+ENABLE_PLUGINS_BY_DEFAULT = _config.ocr.enabled_by_default
+MAX_UPLOAD_SIZE = _config.upload.max_size
+
+# OCR Languages supported
+OCR_LANGUAGES = {
+    "chi_tra": "Traditional Chinese",
+    "chi_sim": "Simplified Chinese", 
+    "eng": "English",
+    "jpn": "Japanese",
+    "kor": "Korean",
+    "tha": "Thai",
+    "vie": "Vietnamese"
+}
+
+# Initialize MarkItDown
+md = MarkItDown()
+
 # Original convert_file_endpoint with concurrency control added
 async def convert_file_endpoint_with_concurrency(
     file: UploadFile = File(..., description="File to convert"),
@@ -140,7 +193,7 @@ async def convert_file_endpoint_with_concurrency(
                     print(f"PDF content is empty or less than 10 characters, attempting OCR...")
                 
                 try:
-                    ocr_result = ocr_image_pdf(tmp_path, ocr_lang or DEFAULT_OCR_LANG)
+                    ocr_result = ocr_pdf(tmp_path, ocr_lang or DEFAULT_OCR_LANG)
                     if ocr_result and len(ocr_result.strip()) > len(text_content.strip()):
                         text_content = f"[OCR Result]\n\n{ocr_result}"
                         if API_DEBUG:
@@ -149,19 +202,14 @@ async def convert_file_endpoint_with_concurrency(
                     if API_DEBUG:
                         print(f"OCR failed: {ocr_error}")
             
-            # Special handling: If image and OCR enabled, use Tesseract
+            # Special handling: If image and OCR enabled, use pytesseract SDK
             image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'}
             if file_ext in image_extensions and enable_plugins:
                 if API_DEBUG:
                     print(f"Image OCR processing...")
                 
                 try:
-                    ocr_result = subprocess.run(
-                        ["tesseract", tmp_path, "stdout", "-l", ocr_lang or DEFAULT_OCR_LANG],
-                        capture_output=True,
-                        text=True
-                    )
-                    ocr_text = ocr_result.stdout.strip()
+                    ocr_text = ocr_image(tmp_path, ocr_lang or DEFAULT_OCR_LANG)
                     if ocr_text and len(ocr_text) > len(text_content.strip()):
                         text_content = f"[OCR Result]\n\n{ocr_text}"
                         if API_DEBUG:

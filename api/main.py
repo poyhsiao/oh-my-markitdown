@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 from datetime import datetime
 import io
-import subprocess
 import re
 from urllib.parse import urlparse
 from typing import Optional
@@ -26,6 +25,9 @@ from .response import (
 
 # Import concurrency manager
 from .concurrency import get_concurrency_manager
+
+# Import OCR client module
+from .ocr_client import ocr_image, ocr_pdf, OCRError
 
 try:
     _config = validate_environment()
@@ -47,12 +49,12 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
     """
-    Perform OCR on image-based PDFs.
+    Perform OCR on image-based PDFs using pytesseract SDK.
     
     Some PDFs are scanned documents (image PDFs), which MarkItDown cannot extract text from directly.
     This function:
     1. Uses PyMuPDF to convert PDF pages to high-resolution images
-    2. Uses Tesseract OCR to recognize text in the images
+    2. Uses pytesseract OCR to recognize text in the images
     
     Args:
         pdf_path: Path to the PDF file
@@ -62,58 +64,16 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
         OCR recognized text content
     """
     try:
-        import fitz  # PyMuPDF
-        from PIL import Image
-        
-        doc = fitz.open(pdf_path)
-        all_text = []
-        
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            
-            # Check if page has extractable text
-            text = page.get_text()
-            if text.strip():
-                # If text exists, use it directly
-                all_text.append(f"--- Page {page_num + 1} ---\n{text}")
-                continue
-            
-            # No text, use OCR
-            # High resolution rendering (3x zoom)
-            mat = fitz.Matrix(3, 3)
-            pix = page.get_pixmap(matrix=mat)
-            
-            # Save as temporary image
-            temp_img = f"/tmp/page_{page_num}.png"
-            pix.save(temp_img)
-            
-            # Use Tesseract OCR
-            result = subprocess.run(
-                ["tesseract", temp_img, "stdout", "-l", ocr_lang],
-                capture_output=True,
-                text=True
-            )
-            
-            ocr_text = result.stdout.strip()
-            if ocr_text:
-                all_text.append(f"--- Page {page_num + 1} (OCR) ---\n{ocr_text}")
-            
-            # Clean up temporary image
-            try:
-                os.unlink(temp_img)
-            except:
-                pass
-        
-        doc.close()
-        return "\n\n".join(all_text)
-    
+        return ocr_pdf(pdf_path, ocr_lang, zoom=3.0, min_text_length=10)
+    except OCRError as e:
+        raise Exception(f"OCR processing failed: {str(e)}")
     except Exception as e:
         raise Exception(f"OCR processing failed: {str(e)}")
 
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.3.1",
+    version="0.4.0",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -410,19 +370,14 @@ async def convert_file_endpoint(
                     if API_DEBUG:
                         print(f"OCR failed: {ocr_error}")
             
-            # Special handling: If image and OCR enabled, use Tesseract
+            # Special handling: If image and OCR enabled, use pytesseract SDK
             image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff'}
             if file_ext in image_extensions and enable_plugins:
                 if API_DEBUG:
                     print(f"Image OCR processing...")
                 
                 try:
-                    ocr_result = subprocess.run(
-                        ["tesseract", tmp_path, "stdout", "-l", ocr_lang or DEFAULT_OCR_LANG],
-                        capture_output=True,
-                        text=True
-                    )
-                    ocr_text = ocr_result.stdout.strip()
+                    ocr_text = ocr_image(tmp_path, ocr_lang or DEFAULT_OCR_LANG)
                     if ocr_text and len(ocr_text) > len(text_content.strip()):
                         text_content = f"[OCR Result]\n\n{ocr_text}"
                         if API_DEBUG:
@@ -878,7 +833,7 @@ async def get_config():
     """Get current API configuration (sensitive info hidden)."""
     return {
         "api": {
-            "version": "0.3.1",
+            "version": "0.4.0",
             "debug": API_DEBUG,
             "max_upload_size": MAX_UPLOAD_SIZE,
             "max_upload_size_mb": MAX_UPLOAD_SIZE // 1024 // 1024,

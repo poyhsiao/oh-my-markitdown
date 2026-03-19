@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-19
+
+### Changed
+
+- Migrated from subprocess CLI calls to native Python SDK APIs for better performance and error handling
+- yt-dlp CLI calls replaced with yt-dlp Python SDK (`YouTubeClient` module)
+- ffmpeg CLI calls replaced with ffmpeg-python SDK (`audio_extractor` module)
+- tesseract CLI calls replaced with pytesseract SDK (`ocr_client` module)
+- Python dependency management switched from pip to uv
+- Removed `markitdown-ocr` dependency (using custom `ocr_client` module instead)
+
+### Added
+
+- New SDK modules: `api/youtube_client.py`, `api/audio_extractor.py`, `api/ocr_client.py`
+- Unit tests for all new SDK modules with >80% coverage
+- `pyproject.toml` for modern Python project configuration
+- `Makefile` with common development commands
+- Proper exception hierarchy for each SDK module
+- `DEFAULT_OCR_LANG` constant to `api/constants.py`
+
+### Performance
+
+- Reduced process fork overhead (~50-200ms per call) by using native SDK APIs
+- Improved error handling with structured Python exceptions
+
+---
+
 ## [0.3.1] - 2026-03-19
 
 ### Added
@@ -99,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.4.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.1.0...v0.2.0
