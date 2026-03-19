@@ -107,8 +107,8 @@ services:
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
     
-    # 命令：運行自動轉換腳本
-    command: ["python", "api/auto_convert.py"]
+    # 命令：運行自動轉換腳本（使用 uv run 確保虛擬環境正確）
+    command: ["uv", "run", "python", "api/auto_convert.py"]
     
     # 資源限制
     deploy:
