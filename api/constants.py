@@ -107,3 +107,12 @@ COMPUTE_TYPE_BY_DEVICE = {
     "cuda": "float16",
     "mps": "float16"
 }
+
+# ===== Chunking Configuration =====
+# For handling long audio/video files that may cause Cloudflare 524 timeout
+# Cloudflare has a 100-second timeout limit for proxied requests
+DEFAULT_CHUNK_DURATION = 60           # Max duration per chunk (seconds)
+DEFAULT_CHUNK_OVERLAP = 2             # Overlap between chunks (seconds)
+DEFAULT_AUTO_CHUNK_THRESHOLD = 90    # Auto-enable chunking above this duration (100s - 10s buffer)
+MAX_TOTAL_DURATION = 7200            # Max total processing time (2 hours)
+MIN_CHUNK_DURATION = 10              # Minimum chunk duration (seconds)

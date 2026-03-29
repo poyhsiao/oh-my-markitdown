@@ -76,6 +76,7 @@ COPY api/system.py /app/api/system.py
 COPY api/response.py /app/api/response.py
 COPY api/concurrency.py /app/api/concurrency.py
 COPY api/subtitles.py /app/api/subtitles.py
+COPY api/chunking.py /app/api/chunking.py
 COPY api/ip_whitelist.py /app/api/ip_whitelist.py
 COPY api/youtube_grabber.py /app/api/youtube_grabber.py
 COPY api/youtube_client.py /app/api/youtube_client.py

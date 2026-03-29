@@ -63,9 +63,19 @@ class SubtitleInfo:
         return bool(self.manual or self.auto)
 
     @property
-    def available_langs(self) -> set[str]:
-        """Get all available language codes."""
-        return {t.lang for t in self.manual + self.auto}
+    def available_langs(self) -> list[str]:
+        """Get all available language codes in order.
+
+        Manual subtitles come first (preserving order), followed by auto subtitles.
+        Duplicates are removed while preserving order.
+        """
+        seen = set()
+        result = []
+        for track in self.manual + self.auto:
+            if track.lang not in seen:
+                seen.add(track.lang)
+                result.append(track.lang)
+        return result
 
     def get_best_track(self, preferred_langs: list[str]) -> Optional[SubtitleTrack]:
         """Get the best subtitle track based on language priority.

@@ -65,7 +65,7 @@ class TestSubtitleInfo:
             ],
             auto=[SubtitleTrack(lang="ja", name="Japanese", is_auto=True)]
         )
-        assert info.available_langs == {"en", "zh-Hant", "ja"}
+        assert info.available_langs == ["en", "zh-Hant", "ja"]
 
     def test_get_best_track_manual_priority(self):
         info = SubtitleInfo(

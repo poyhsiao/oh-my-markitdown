@@ -10,7 +10,41 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, List
 from faster_whisper import WhisperModel
 
-from .constants import WHISPER_MODEL_CACHE_SIZE, DEFAULT_YOUTUBE_INFO_TIMEOUT, DEFAULT_YOUTUBE_DOWNLOAD_TIMEOUT, DEFAULT_AUDIO_EXTRACT_TIMEOUT, SUBTITLE_LANG_PRIORITY, SUBTITLE_DOWNLOAD_TIMEOUT, MODEL_SELECTION_THRESHOLDS, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, AUDIO_CODEC, AUDIO_FFMPEG_THREADS, DEFAULT_VAD_MIN_SILENCE_MS, DEFAULT_VAD_THRESHOLD, DEFAULT_VAD_SPEECH_PAD_MS, DEFAULT_CPU_THREADS
+from .constants import (
+    WHISPER_MODEL_CACHE_SIZE,
+    DEFAULT_YOUTUBE_INFO_TIMEOUT,
+    DEFAULT_YOUTUBE_DOWNLOAD_TIMEOUT,
+    DEFAULT_AUDIO_EXTRACT_TIMEOUT,
+    SUBTITLE_LANG_PRIORITY,
+    SUBTITLE_DOWNLOAD_TIMEOUT,
+    MODEL_SELECTION_THRESHOLDS,
+    AUDIO_SAMPLE_RATE,
+    AUDIO_CHANNELS,
+    AUDIO_CODEC,
+    AUDIO_FFMPEG_THREADS,
+    DEFAULT_VAD_MIN_SILENCE_MS,
+    DEFAULT_VAD_THRESHOLD,
+    DEFAULT_VAD_SPEECH_PAD_MS,
+    DEFAULT_CPU_THREADS,
+    DEFAULT_CHUNK_DURATION,
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_AUTO_CHUNK_THRESHOLD,
+    MAX_TOTAL_DURATION,
+    MIN_CHUNK_DURATION,
+)
+from .chunking import (
+    ChunkConfig,
+    AudioChunk,
+    get_audio_duration,
+    should_enable_chunking,
+    calculate_chunk_segments,
+    split_audio_into_chunks,
+    transcribe_chunk,
+    merge_transcription_results,
+    cleanup_chunks,
+    estimate_processing_time,
+    get_chunking_recommendation,
+)
 from .subtitles import format_multiline_output, format_transcript_with_timestamps
 
 # Import new SDK modules
@@ -586,7 +620,6 @@ def extract_audio_from_video(
         channels=AUDIO_CHANNELS,
         codec=AUDIO_CODEC,
         threads=threads,
-        timeout=AUDIO_EXTRACT_TIMEOUT,
     )
 
 
@@ -703,7 +736,6 @@ def download_and_convert_subtitles(
         manual_langs = {t.lang for t in subtitle_info.manual}
         
         # Get the language from the VTT filename (format: {video_id}.{lang}.vtt)
-        import os
         vtt_filename = os.path.basename(vtt_path)
         parts = vtt_filename.replace('.vtt', '').split('.')
         downloaded_lang = parts[-1] if len(parts) > 1 else None
@@ -769,3 +801,151 @@ def _parse_vtt_to_text(vtt_path: str) -> str:
 
 
 from .constants import SUPPORTED_LANGUAGES
+
+
+def transcribe_audio_chunked(
+    audio_path: str,
+    language: str = "auto",
+    model_size: Optional[str] = None,
+    device: Optional[str] = None,
+    compute_type: Optional[str] = None,
+    cpu_threads: Optional[int] = None,
+    vad_enabled: bool = True,
+    vad_params: Optional[dict] = None,
+    word_timestamps: bool = False,
+    enable_chunking: bool = False,
+    chunk_duration: int = DEFAULT_CHUNK_DURATION,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    auto_enable_threshold: int = DEFAULT_AUTO_CHUNK_THRESHOLD,
+) -> Tuple[str, dict]:
+    """
+    Transcribe audio with optional chunking for long files.
+    
+    This function addresses Cloudflare 524 timeout issues by splitting
+    long audio files into smaller chunks that can be processed within
+    the timeout limit.
+    
+    Args:
+        audio_path: Path to audio file
+        language: Language code or "auto" for detection
+        model_size: Model size (None = use config default)
+        device: Compute device (None = use config default)
+        compute_type: Compute type (None = use config default)
+        cpu_threads: CPU threads (None = auto detect)
+        vad_enabled: Enable VAD filtering
+        vad_params: Custom VAD parameters
+        word_timestamps: Enable word-level timestamps
+        enable_chunking: Enable automatic chunking
+        chunk_duration: Max duration per chunk (seconds)
+        chunk_overlap: Overlap between chunks (seconds)
+        auto_enable_threshold: Auto-enable chunking above this duration
+    
+    Returns:
+        Tuple of (transcription_text, metadata)
+    """
+    start_time = time.time()
+    
+    effective_model = model_size or DEFAULT_MODEL
+    effective_device = device or DEFAULT_DEVICE
+    effective_compute_type = compute_type or DEFAULT_COMPUTE_TYPE
+    effective_threads = cpu_threads or DEFAULT_CPU_THREADS
+    
+    try:
+        duration = get_audio_duration(audio_path)
+    except Exception:
+        duration = None
+    
+    chunk_config = ChunkConfig(
+        enabled=enable_chunking,
+        chunk_duration=chunk_duration,
+        overlap_duration=chunk_overlap,
+        auto_enable_threshold=auto_enable_threshold,
+        max_total_duration=MAX_TOTAL_DURATION,
+        min_chunk_duration=MIN_CHUNK_DURATION,
+    )
+    
+    # Determine if chunking should be used
+    use_chunking = should_enable_chunking(
+        duration=duration,
+        config=chunk_config,
+    ) if duration else enable_chunking
+    
+    if not use_chunking:
+        return transcribe_audio(
+            audio_path=audio_path,
+            language=language,
+            model_size=effective_model,
+            device=effective_device,
+            compute_type=effective_compute_type,
+            cpu_threads=effective_threads,
+            vad_enabled=vad_enabled,
+            vad_params=vad_params,
+            word_timestamps=word_timestamps,
+        )
+    
+    # Load model for chunk transcription
+    model = get_model(
+        model_size=effective_model,
+        device=effective_device,
+        compute_type=effective_compute_type,
+        cpu_threads=effective_threads,
+    )
+    
+    # Split audio into chunks
+    chunks = split_audio_into_chunks(
+        file_path=audio_path,
+        config=chunk_config,
+    )
+    
+    if not chunks:
+        raise RuntimeError("Failed to create audio chunks")
+    
+    # Process each chunk
+    chunk_results = []
+    for chunk in chunks:
+        try:
+            result = transcribe_chunk(
+                chunk=chunk,
+                model=model,
+                language=None if language == "auto" else language,
+                beam_size=5,
+                vad_filter=vad_enabled,
+                temperature=0.0,
+            )
+            
+            chunk_results.append(result)
+        except Exception as e:
+            chunk_results.append({
+                'segments': [],  # Required for merge_transcription_results
+                'text': '',
+                'language': 'unknown',
+                'language_probability': 0.0,
+                'chunk_id': chunk.chunk_id,
+                'chunk_start': chunk.start_time,
+                'chunk_end': chunk.end_time,
+                'error': str(e),
+            })
+    
+    # Merge results
+    merged = merge_transcription_results(
+        results=chunk_results,
+        overlap_duration=chunk_overlap,
+        min_segment_gap=0.5,
+    )
+    
+    # Cleanup temporary chunks
+    cleanup_chunks(chunks)
+    
+    processing_time_ms = int((time.time() - start_time) * 1000)
+    
+    metadata = {
+        "processing_time_ms": processing_time_ms,
+        "chunking_enabled": True,
+        "total_chunks": len(chunks),
+        "language": merged.get("language", "unknown"),
+        "language_probability": merged.get("language_probability", 0.0),
+    }
+    if duration:
+        metadata["original_duration"] = duration
+    
+    return merged.get("text", ""), metadata

@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-03-29
+
+### Changed
+
+- Simplified STT (Speech-to-Text) parameters across all audio/video transcription endpoints
+- All transcription endpoints now use fixed optimal settings:
+  - `device=auto` (auto-detect CPU/GPU)
+  - `cpu_threads=0` (auto-detect)
+  - `vad_enabled=true` (Voice Activity Detection)
+  - `enable_chunking=true` (chunked transcription for long files)
+  - `chunk_duration=60` (seconds per chunk)
+  - `chunk_overlap=2` (seconds overlap between chunks)
+  - `auto_chunk_threshold=90` (auto-enable chunking for files > 90 seconds)
+
+### Fixed
+
+- Latin-1 encoding error when downloading files with non-ASCII (Chinese) filenames
+- LSP type error: `accept_language: str = None` → `accept_language: Optional[str] = None`
+- LSP error: `transcribe_youtube_video` receiving `None` for language parameter
+
+### Added
+
+- New `api/chunking.py` module for audio chunking support
+- Unit tests for chunking functionality
+
+---
+
 ## [0.4.0] - 2026-03-19
 
 ### Changed
@@ -126,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.4.1]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.2.0...v0.3.0

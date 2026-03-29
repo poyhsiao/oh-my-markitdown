@@ -272,6 +272,24 @@ curl -X POST "http://localhost:51083/api/v1/convert/audio?device=cuda" \
   -o transcript.md
 ```
 
+**Audio/Video chunking for long files (solves Cloudflare 524 timeout):**
+```bash
+# Auto-enable chunking for files > 90 seconds (default behavior)
+curl -X POST "http://localhost:51083/api/v1/convert/audio?auto_chunk_threshold=90" \
+  -F "file=@long-audio.mp3" \
+  -o transcript.md
+
+# Manually enable chunking
+curl -X POST "http://localhost:51083/api/v1/convert/audio?enable_chunking=true&chunk_duration=60&chunk_overlap=2" \
+  -F "file=@long-audio.mp3" \
+  -o transcript.md
+
+# Video chunking (same parameters)
+curl -X POST "http://localhost:51083/api/v1/convert/video?enable_chunking=true" \
+  -F "file=@long-video.mp4" \
+  -o transcript.md
+```
+
 For complete API documentation, see [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
 
 ---
@@ -436,8 +454,8 @@ For issues, please check:
 ---
 
 **Created by:** Kimhsiao  
-**Last Updated:** 2026-03-19  
-**Version:** 0.4.0  
+**Last Updated:** 2026-03-29  
+**Version:** 0.4.1  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  
 **Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
 **New Features:** YouTube transcription, Audio transcription (Faster-Whisper), GPU Acceleration (CUDA/MPS), System Management API, SDK Migration (native Python APIs)

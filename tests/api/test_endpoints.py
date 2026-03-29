@@ -688,8 +688,214 @@ class TestDeviceUtilsFunctions:
         assert result == 4
 
     def test_get_recommended_threads_caps_at_max(self):
-        """Test get_recommended_threads caps at MAX_CPU_THREADS."""
-        from api.device_utils import get_recommended_threads
+         """Test get_recommended_threads caps at MAX_CPU_THREADS."""
+         from api.device_utils import get_recommended_threads
+         
+         result = get_recommended_threads(100)  # Request more than max
+         assert result <= 8  # Should be capped at MAX_CPU_THREADS
+
+
+class TestAudioChunkingParameters:
+    """Test audio endpoint chunking parameters for Cloudflare 524 timeout resolution."""
+
+    def test_audio_endpoint_has_enable_chunking_parameter(self):
+        """Test /api/v1/convert/audio has enable_chunking parameter."""
+        from api.main import transcribe_audio_file
+        import inspect
         
-        result = get_recommended_threads(100)  # Request more than max
-        assert result <= 8  # Should be capped at MAX_CPU_THREADS
+        sig = inspect.signature(transcribe_audio_file)
+        params = sig.parameters
+        
+        assert "enable_chunking" in params, "Parameter 'enable_chunking' should exist for chunking control"
+
+    def test_audio_endpoint_has_chunk_duration_parameter(self):
+        """Test /api/v1/convert/audio has chunk_duration parameter."""
+        from api.main import transcribe_audio_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        params = sig.parameters
+        
+        assert "chunk_duration" in params, "Parameter 'chunk_duration' should exist for chunk duration control"
+
+    def test_audio_endpoint_has_chunk_overlap_parameter(self):
+        """Test /api/v1/convert/audio has chunk_overlap parameter."""
+        from api.main import transcribe_audio_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        params = sig.parameters
+        
+        assert "chunk_overlap" in params, "Parameter 'chunk_overlap' should exist for overlap control"
+
+    def test_audio_endpoint_has_auto_chunk_threshold_parameter(self):
+        """Test /api/v1/convert/audio has auto_chunk_threshold parameter."""
+        from api.main import transcribe_audio_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        params = sig.parameters
+        
+        assert "auto_chunk_threshold" in params, "Parameter 'auto_chunk_threshold' should exist for auto-enable threshold"
+
+    def test_enable_chunking_default_is_false(self):
+        """Test enable_chunking defaults to False (chunking disabled by default)."""
+        from api.main import transcribe_audio_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        param = sig.parameters["enable_chunking"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default is False, "enable_chunking default should be False"
+        else:
+            assert default is False, "enable_chunking default should be False"
+
+    def test_chunk_duration_default(self):
+        """Test chunk_duration defaults to constants.DEFAULT_CHUNK_DURATION (60 seconds)."""
+        from api.main import transcribe_audio_file
+        from api.constants import DEFAULT_CHUNK_DURATION
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        param = sig.parameters["chunk_duration"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == DEFAULT_CHUNK_DURATION, f"chunk_duration default should be {DEFAULT_CHUNK_DURATION}"
+        else:
+            assert default == DEFAULT_CHUNK_DURATION, f"chunk_duration default should be {DEFAULT_CHUNK_DURATION}"
+
+    def test_chunk_overlap_default(self):
+        """Test chunk_overlap defaults to constants.DEFAULT_CHUNK_OVERLAP (2 seconds)."""
+        from api.main import transcribe_audio_file
+        from api.constants import DEFAULT_CHUNK_OVERLAP
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        param = sig.parameters["chunk_overlap"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == DEFAULT_CHUNK_OVERLAP, f"chunk_overlap default should be {DEFAULT_CHUNK_OVERLAP}"
+        else:
+            assert default == DEFAULT_CHUNK_OVERLAP, f"chunk_overlap default should be {DEFAULT_CHUNK_OVERLAP}"
+
+    def test_auto_chunk_threshold_default(self):
+        """Test auto_chunk_threshold defaults to constants.DEFAULT_AUTO_CHUNK_THRESHOLD (90 seconds)."""
+        from api.main import transcribe_audio_file
+        from api.constants import DEFAULT_AUTO_CHUNK_THRESHOLD
+        import inspect
+        
+        sig = inspect.signature(transcribe_audio_file)
+        param = sig.parameters["auto_chunk_threshold"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == DEFAULT_AUTO_CHUNK_THRESHOLD, f"auto_chunk_threshold default should be {DEFAULT_AUTO_CHUNK_THRESHOLD}"
+        else:
+            assert default == DEFAULT_AUTO_CHUNK_THRESHOLD, f"auto_chunk_threshold default should be {DEFAULT_AUTO_CHUNK_THRESHOLD}"
+
+
+class TestVideoChunkingParameters:
+    """Test video endpoint chunking parameters for Cloudflare 524 timeout resolution."""
+
+    def test_video_endpoint_has_enable_chunking_parameter(self):
+        """Test /api/v1/convert/video has enable_chunking parameter."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        params = sig.parameters
+        
+        assert "enable_chunking" in params, "Parameter 'enable_chunking' should exist for chunking control"
+
+    def test_video_endpoint_has_chunk_duration_parameter(self):
+        """Test /api/v1/convert/video has chunk_duration parameter."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        params = sig.parameters
+        
+        assert "chunk_duration" in params, "Parameter 'chunk_duration' should exist for chunk duration control"
+
+    def test_video_endpoint_has_chunk_overlap_parameter(self):
+        """Test /api/v1/convert/video has chunk_overlap parameter."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        params = sig.parameters
+        
+        assert "chunk_overlap" in params, "Parameter 'chunk_overlap' should exist for overlap control"
+
+    def test_video_endpoint_has_auto_chunk_threshold_parameter(self):
+        """Test /api/v1/convert/video has auto_chunk_threshold parameter."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        params = sig.parameters
+        
+        assert "auto_chunk_threshold" in params, "Parameter 'auto_chunk_threshold' should exist for auto-enable threshold"
+
+    def test_video_enable_chunking_default_is_false(self):
+        """Test video enable_chunking defaults to False (chunking disabled by default)."""
+        from api.main import transcribe_video_file
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        param = sig.parameters["enable_chunking"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default is False, "enable_chunking default should be False"
+        else:
+            assert default is False, "enable_chunking default should be False"
+
+    def test_video_chunk_duration_default(self):
+        """Test video chunk_duration defaults to constants.DEFAULT_CHUNK_DURATION (60 seconds)."""
+        from api.main import transcribe_video_file
+        from api.constants import DEFAULT_CHUNK_DURATION
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        param = sig.parameters["chunk_duration"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == DEFAULT_CHUNK_DURATION, f"chunk_duration default should be {DEFAULT_CHUNK_DURATION}"
+        else:
+            assert default == DEFAULT_CHUNK_DURATION, f"chunk_duration default should be {DEFAULT_CHUNK_DURATION}"
+
+    def test_video_chunk_overlap_default(self):
+        """Test video chunk_overlap defaults to constants.DEFAULT_CHUNK_OVERLAP (2 seconds)."""
+        from api.main import transcribe_video_file
+        from api.constants import DEFAULT_CHUNK_OVERLAP
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        param = sig.parameters["chunk_overlap"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == DEFAULT_CHUNK_OVERLAP, f"chunk_overlap default should be {DEFAULT_CHUNK_OVERLAP}"
+        else:
+            assert default == DEFAULT_CHUNK_OVERLAP, f"chunk_overlap default should be {DEFAULT_CHUNK_OVERLAP}"
+
+    def test_video_auto_chunk_threshold_default(self):
+        """Test video auto_chunk_threshold defaults to constants.DEFAULT_AUTO_CHUNK_THRESHOLD (90 seconds)."""
+        from api.main import transcribe_video_file
+        from api.constants import DEFAULT_AUTO_CHUNK_THRESHOLD
+        import inspect
+        
+        sig = inspect.signature(transcribe_video_file)
+        param = sig.parameters["auto_chunk_threshold"]
+        
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == DEFAULT_AUTO_CHUNK_THRESHOLD, f"auto_chunk_threshold default should be {DEFAULT_AUTO_CHUNK_THRESHOLD}"
+        else:
+            assert default == DEFAULT_AUTO_CHUNK_THRESHOLD, f"auto_chunk_threshold default should be {DEFAULT_AUTO_CHUNK_THRESHOLD}"

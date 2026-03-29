@@ -9,6 +9,7 @@ import io
 import re
 from urllib.parse import urlparse
 from typing import Optional
+import requests
 
 # Validate environment variables on startup
 from .config import validate_environment, ConfigurationError
@@ -73,7 +74,7 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.4.0",
+    version="0.4.1",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -128,7 +129,7 @@ ERROR_MESSAGES = {
     }
 }
 
-def get_error_message(key: str, accept_language: str = None) -> str:
+def get_error_message(key: str, accept_language: Optional[str] = None) -> str:
     """Get error message in preferred language."""
     lang = accept_language if accept_language else ERROR_LANG
     if lang not in ERROR_MESSAGES:
@@ -451,6 +452,7 @@ async def convert_file_legacy(
 
 from .whisper_transcribe import (
     transcribe_audio,
+    transcribe_audio_chunked,
     transcribe_youtube_video,
     transcribe_with_formats,
     extract_audio_from_video,
@@ -460,6 +462,13 @@ from .whisper_transcribe import (
 from .response import success_response, transcribe_response, ErrorCodes
 from .concurrency import get_concurrency_manager
 from .device_utils import get_device_info
+from .chunking import ChunkConfig, get_audio_duration, should_enable_chunking
+from .constants import (
+    DEFAULT_CHUNK_DURATION,
+    DEFAULT_CHUNK_OVERLAP,
+    DEFAULT_AUTO_CHUNK_THRESHOLD,
+    MAX_TOTAL_DURATION
+)
 
 @api_router.post("/convert/youtube")
 async def transcribe_youtube(
@@ -470,10 +479,7 @@ async def transcribe_youtube(
     include_timestamps: bool = Query(False, description="Include timestamps"),
     include_metadata: bool = Query(True, description="Include metadata"),
     prefer_subtitles: bool = Query(True, description="Prefer YouTube subtitles if available (faster)"),
-    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)"),
-    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
-    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
-    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
+    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)")
 ):
     """
     Download YouTube video audio and transcribe using Whisper.
@@ -491,19 +497,16 @@ async def transcribe_youtube(
     - **include_metadata**: Include transcription metadata
     - **prefer_subtitles**: Prefer YouTube subtitles if available (faster, default: true)
     - **fast_mode**: Enable fast mode with optimizations for Whisper path
-    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
-    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
-    - **vad_enabled**: Enable VAD filtering. Default: True.
     
     **Response metadata fields (new in v0.3.0):**
     - **source**: "youtube_subtitles" or "whisper" - indicates transcription source
     - **is_auto_generated**: boolean - whether subtitles are auto-generated (for subtitle source)
     - **processing_time_ms**: integer - processing time in milliseconds
     
-    **Performance Tips:**
-    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
-    - Use `device=mps` for Apple Silicon (2-4x faster)
-    - Set `cpu_threads=0` for auto-detection of optimal thread count
+    **Fixed settings:**
+    - device: auto (auto-detect CPU/GPU)
+    - cpu_threads: 0 (auto-detect)
+    - vad_enabled: true
     """
     
     # Set request ID
@@ -544,14 +547,13 @@ async def transcribe_youtube(
     # Slot acquired, proceed with processing
 
     try:
-        # Transcribe YouTube video
         result = transcribe_youtube_video(
             url=url,
             language=language,
             model_size=model_size,
-            device=device,
-            cpu_threads=cpu_threads,
-            vad_enabled=vad_enabled if vad_enabled is not None else True,
+            device="auto",
+            cpu_threads=0,
+            vad_enabled=True,
             prefer_subtitles=prefer_subtitles,
             fast_mode=fast_mode
         )
@@ -597,31 +599,22 @@ async def transcribe_audio_file(
     language: str = Query("zh", description="Language code"),
     model_size: str = Query("base", description="Model size"),
     return_format: str = Query("markdown", description="Response format"),
-    include_timestamps: bool = Query(False, description="Include timestamps"),
-    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
-    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
-    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
+    include_timestamps: bool = Query(False, description="Include timestamps")
 ):
     """
-    Upload audio file and transcribe using Whisper.
+    Upload audio file and transcribe using Whisper with chunking support.
     
     - **file**: Audio file (MP3, WAV, M4A, FLAC, etc.)
     - **language**: Language code
     - **model_size**: Model size (tiny, base, small, medium, large)
     - **return_format**: Response format (markdown or json)
     - **include_timestamps**: Include timestamps
-    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
-    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
-    - **vad_enabled**: Enable VAD filtering. Default: True.
     
-    **Performance Tips:**
-    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
-    - Use `device=mps` for Apple Silicon (2-4x faster)
-    - Set `cpu_threads=0` for auto-detection of optimal thread count
+    Fixed STT settings: device=auto, cpu_threads=0, vad_enabled=true,
+    enable_chunking=true, chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
     """
     
     try:
-        # Save uploaded file
         suffix = Path(file.filename or "").suffix
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             content = await file.read()
@@ -629,14 +622,17 @@ async def transcribe_audio_file(
             tmp_path = tmp.name
         
         try:
-            # Transcribe
-            transcript, metadata = transcribe_audio(
+            transcript, metadata = transcribe_audio_chunked(
                 tmp_path,
                 language=language,
                 model_size=model_size,
-                device=device,
-                cpu_threads=cpu_threads,
-                vad_enabled=vad_enabled if vad_enabled is not None else True
+                device="auto",
+                cpu_threads=0,
+                vad_enabled=True,
+                enable_chunking=True,
+                chunk_duration=60,
+                chunk_overlap=2,
+                auto_enable_threshold=90
             )
             
             # Format
@@ -646,12 +642,19 @@ async def transcribe_audio_file(
                 metadata=metadata
             )
             
+            from urllib.parse import quote
+            safe_filename = file.filename or "unknown"
+            try:
+                safe_filename.encode('ascii')
+            except UnicodeEncodeError:
+                safe_filename = quote(safe_filename, safe='')
+            
             if return_format == "markdown":
                 return Response(
                     content=markdown_content.encode('utf-8'),
                     media_type="text/markdown; charset=utf-8",
                     headers={
-                        "X-Filename": file.filename or "unknown",
+                        "X-Filename": safe_filename,
                         "X-Conversion-Time": datetime.now().isoformat()
                     }
                 )
@@ -678,14 +681,10 @@ async def transcribe_audio_file(
 
 @api_router.post("/convert/video")
 async def transcribe_video_file(
-    file: UploadFile = File(..., description="Video file (MP4, MKV, WebM, AVI, MOV, FLV, TS)"),
-    language: str = Query("auto", description="Language code (auto=auto-detect)"),
+    file: UploadFile = File(..., description="Video file"),
+    language: str = Query("zh", description="Language code"),
     model_size: str = Query("base", description="Model size"),
-    output_formats: str = Query("markdown", description="Output formats (comma-separated, e.g.: markdown,srt,vtt)"),
-    include_timestamps: bool = Query(False, description="Include timestamps in Markdown"),
-    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
-    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
-    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
+    include_timestamps: bool = Query(False, description="Include timestamps")
 ):
     """
     Upload video file and transcribe using Whisper.
@@ -693,19 +692,12 @@ async def transcribe_video_file(
     - **file**: Video file (MP4, MKV, WebM, AVI, MOV, FLV, TS)
     - **language**: Language code
     - **model_size**: Model size (tiny, base, small, medium, large)
-    - **output_formats**: Output formats (comma-separated, e.g.: markdown,srt,vtt)
     - **include_timestamps**: Include timestamps in Markdown
-    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
-    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
-    - **vad_enabled**: Enable VAD filtering. Default: True.
     
-    **Performance Tips:**
-    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
-    - Use `device=mps` for Apple Silicon (2-4x faster)
-    - Set `cpu_threads=0` for auto-detection of optimal thread count
+    Fixed STT settings: device=auto, cpu_threads=0, vad_enabled=true,
+    enable_chunking=true, chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
     """
     
-    # Validate video file type
     allowed_video_extensions = {
         '.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts'
     }
@@ -718,7 +710,6 @@ async def transcribe_video_file(
         )
     
     try:
-        # Save uploaded video file
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
             content = await file.read()
             tmp.write(content)
@@ -727,34 +718,139 @@ async def transcribe_video_file(
         audio_path = None
         
         try:
-            # Extract audio
             audio_path = extract_audio_from_video(video_path)
             
-            # Transcribe and generate multiple formats
-            formats_dict, metadata = transcribe_with_formats(
+            transcript, metadata = transcribe_audio_chunked(
                 audio_path,
                 language=language,
                 model_size=model_size,
-                device=device,
-                cpu_threads=cpu_threads,
-                vad_enabled=vad_enabled if vad_enabled is not None else True,
-                output_formats=output_formats,
-                include_timestamps=include_timestamps
+                device="auto",
+                cpu_threads=0,
+                vad_enabled=True,
+                enable_chunking=True,
+                chunk_duration=60,
+                chunk_overlap=2,
+                auto_enable_threshold=90
             )
             
-            # Use unified response format
-            return transcribe_response(
-                formats=formats_dict,
-                default_format="markdown",
-                source_type="video",
+            metadata["source"] = "video"
+            metadata["original_filename"] = file.filename
+            
+            markdown_content = format_transcript_as_markdown(
                 title=file.filename or "Video Transcription",
-                duration=metadata.get("duration"),
-                language=language,
-                model=model_size
+                transcript=transcript,
+                metadata=metadata
+            )
+            
+            from urllib.parse import quote
+            safe_filename = file.filename or "unknown"
+            try:
+                safe_filename.encode('ascii')
+            except UnicodeEncodeError:
+                safe_filename = quote(safe_filename, safe='')
+            
+            return Response(
+                content=markdown_content.encode('utf-8'),
+                media_type="text/markdown; charset=utf-8",
+                headers={
+                    "X-Filename": safe_filename,
+                    "X-Source": "video",
+                    "X-Language": language,
+                    "X-Model": model_size
+                }
             )
         
         finally:
-            # Clean up temporary file
+            if os.path.exists(video_path):
+                os.unlink(video_path)
+            if audio_path and os.path.exists(audio_path):
+                os.unlink(audio_path)
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Video transcription failed: {str(e)}"
+        )
+    
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+            content = await file.read()
+            tmp.write(content)
+            video_path = tmp.name
+        
+        audio_path = None
+        
+        try:
+            audio_path = extract_audio_from_video(video_path)
+            
+            use_chunking = enable_chunking
+            audio_duration = None
+            
+            if not use_chunking and auto_chunk_threshold > 0:
+                try:
+                    audio_duration = get_audio_duration(audio_path)
+                    if audio_duration > auto_chunk_threshold:
+                        logger.info(f"Auto-enabling chunking for {audio_duration:.1f}s video...")
+                        use_chunking = True
+                except Exception as e:
+                    logger.warning(f"Failed to get audio duration: {e}")
+            
+            if use_chunking:
+                if output_formats != "markdown" and output_formats != "":
+                    logger.warning("Chunking enabled: only markdown output is supported. Ignoring output_formats parameter.")
+                
+                transcript, metadata = transcribe_audio_chunked(
+                    audio_path,
+                    language=language,
+                    model_size=model_size,
+                    device=device,
+                    cpu_threads=cpu_threads,
+                    vad_enabled=vad_enabled if vad_enabled is not None else True,
+                    enable_chunking=True,
+                    chunk_duration=chunk_duration,
+                    chunk_overlap=chunk_overlap,
+                    auto_enable_threshold=0
+                )
+                
+                metadata["chunking_enabled"] = True
+                metadata["chunk_duration"] = chunk_duration
+                metadata["source"] = "video"
+                metadata["original_filename"] = file.filename
+                
+                formats_dict = {"markdown": transcript}
+                
+                return transcribe_response(
+                    formats=formats_dict,
+                    default_format="markdown",
+                    source_type="video",
+                    title=file.filename or "Video Transcription",
+                    duration=metadata.get("duration"),
+                    language=language,
+                    model=model_size
+                )
+            else:
+                formats_dict, metadata = transcribe_with_formats(
+                    audio_path,
+                    language=language,
+                    model_size=model_size,
+                    device=device,
+                    cpu_threads=cpu_threads,
+                    vad_enabled=vad_enabled if vad_enabled is not None else True,
+                    output_formats=output_formats,
+                    include_timestamps=include_timestamps
+                )
+                
+                return transcribe_response(
+                    formats=formats_dict,
+                    default_format="markdown",
+                    source_type="video",
+                    title=file.filename or "Video Transcription",
+                    duration=metadata.get("duration"),
+                    language=language,
+                    model=model_size
+                )
+        
+        finally:
             if os.path.exists(video_path):
                 os.unlink(video_path)
             if audio_path and os.path.exists(audio_path):
@@ -991,11 +1087,7 @@ async def convert_url(
     language: str = Query("auto", description="Transcription language (auto=auto-detect)"),
     model_size: str = Query("base", description="Whisper model size"),
     ocr_lang: str = Query(DEFAULT_OCR_LANG, description="OCR language"),
-    output_formats: str = Query("markdown", description="Output formats (comma-separated)"),
-    include_timestamps: bool = Query(False, description="Include timestamps in Markdown"),
-    device: Optional[str] = Query(None, description="Compute device (cpu, cuda, mps, auto). Default: use environment variable WHISPER_DEVICE"),
-    cpu_threads: Optional[int] = Query(None, description="CPU threads for transcription (0=auto-detect). Default: use environment variable WHISPER_CPU_THREADS"),
-    vad_enabled: Optional[bool] = Query(None, description="Enable VAD (Voice Activity Detection) filtering. Default: True")
+    include_timestamps: bool = Query(False, description="Include timestamps in Markdown")
 ):
     """
     Unified URL endpoint - auto-detects URL type and processes accordingly.
@@ -1005,11 +1097,7 @@ async def convert_url(
     - **language**: Transcription language (auto=auto-detect)
     - **model_size**: Whisper model size (tiny, base, small, medium, large)
     - **ocr_lang**: OCR language (default: environment variable DEFAULT_OCR_LANG)
-    - **output_formats**: Output formats (comma-separated, e.g.: markdown,srt,vtt)
     - **include_timestamps**: Include timestamps in Markdown
-    - **device**: Compute device (cpu, cuda, mps, auto). Overrides WHISPER_DEVICE env var.
-    - **cpu_threads**: CPU threads for transcription (0=auto-detect). Overrides WHISPER_CPU_THREADS env var.
-    - **vad_enabled**: Enable VAD filtering. Default: True.
     
     Supported types:
     - youtube: YouTube video transcription
@@ -1018,10 +1106,8 @@ async def convert_url(
     - video: Video file transcription
     - webpage: Webpage content conversion
     
-    **Performance Tips:**
-    - Use `device=cuda` for NVIDIA GPU (4-10x faster)
-    - Use `device=mps` for Apple Silicon (2-4x faster)
-    - Set `cpu_threads=0` for auto-detection of optimal thread count
+    Fixed STT settings for audio/video: device=auto, cpu_threads=0, vad_enabled=true,
+    enable_chunking=true, chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
     """
     
     # Set request ID
@@ -1032,54 +1118,25 @@ async def convert_url(
         url_type = detect_url_type(url, type_hint)
         
         if url_type == "youtube":
-            # YouTube video transcription
+            lang_param = None if language == "auto" else language
             result = transcribe_youtube_video(
                 url=url,
-                language=language if language != "auto" else None,
+                language=lang_param if lang_param else "zh",
                 model_size=model_size,
-                device=device,
-                cpu_threads=cpu_threads,
-                vad_enabled=vad_enabled if vad_enabled is not None else True
+                device="auto",
+                cpu_threads=0,
+                vad_enabled=True
             )
             
-            # Format output
-            formats_list = [f.strip() for f in output_formats.split(",")]
-            formats_dict = {}
-            
-            # Generate Markdown format
             markdown_content = format_transcript_as_markdown(
                 title=result["title"],
                 transcript=result["transcript"],
                 metadata=result["metadata"],
                 include_metadata=True
             )
-            formats_dict["markdown"] = markdown_content
-            
-            # Generate other formats (if needed)
-            if "srt" in formats_list or "vtt" in formats_list:
-                # Use transcribe_with_formats to generate multiple formats
-                # Need to download audio first
-                import tempfile
-                import os
-                from .youtube_grabber import download_youtube_audio
-                
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
-                    audio_path = download_youtube_audio(url, tmp.name)
-                    
-                    try:
-                        formats_dict, metadata = transcribe_with_formats(
-                            audio_path,
-                            language=language if language != "auto" else None,
-                            model_size=model_size,
-                            output_formats=output_formats,
-                            include_timestamps=include_timestamps
-                        )
-                    finally:
-                        if os.path.exists(audio_path):
-                            os.unlink(audio_path)
             
             return transcribe_response(
-                formats=formats_dict,
+                formats={"markdown": markdown_content},
                 default_format="markdown",
                 source_type="youtube",
                 title=result["title"],
@@ -1156,24 +1213,20 @@ async def convert_url(
                     os.unlink(tmp_path)
         
         elif url_type == "audio":
-            # Audio file transcription
             import tempfile
             import os
             import requests
             
-            # Download audio file
             response = requests.get(url, stream=True)
             response.raise_for_status()
             
-            # Get filename from URL
             filename = os.path.basename(urlparse(url).path)
             if not filename:
                 filename = "audio"
             
-            # Determine file extension
             file_ext = Path(filename).suffix.lower()
             if not file_ext:
-                file_ext = '.mp3'  # Default
+                file_ext = '.mp3'
             
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -1181,43 +1234,28 @@ async def convert_url(
                 audio_path = tmp.name
             
             try:
-                # Transcribe audio
-                formats_list = [f.strip() for f in output_formats.split(",")]
+                transcript, metadata = transcribe_audio_chunked(
+                    audio_path,
+                    language=language if language != "auto" else "auto",
+                    model_size=model_size,
+                    device="auto",
+                    cpu_threads=0,
+                    vad_enabled=True,
+                    enable_chunking=True,
+                    chunk_duration=60,
+                    chunk_overlap=2,
+                    auto_enable_threshold=90
+                )
                 
-                if len(formats_list) == 1 and formats_list[0] == "markdown":
-                    # Simple transcription, only generate Markdown
-                    transcript, metadata = transcribe_audio(
-                        audio_path,
-                        language=language if language != "auto" else None,
-                        model_size=model_size,
-                        device=device,
-                        cpu_threads=cpu_threads,
-                        vad_enabled=vad_enabled if vad_enabled is not None else True
-                    )
-                    
-                    markdown_content = format_transcript_as_markdown(
-                        title=filename,
-                        transcript=transcript,
-                        metadata=metadata,
-                        include_metadata=True
-                    )
-                    
-                    formats_dict = {"markdown": markdown_content}
-                else:
-                    # Multiple format transcription
-                    formats_dict, metadata = transcribe_with_formats(
-                        audio_path,
-                        language=language if language != "auto" else None,
-                        model_size=model_size,
-                        device=device,
-                        cpu_threads=cpu_threads,
-                        vad_enabled=vad_enabled if vad_enabled is not None else True,
-                        output_formats=output_formats,
-                        include_timestamps=include_timestamps
-                    )
+                markdown_content = format_transcript_as_markdown(
+                    title=filename,
+                    transcript=transcript,
+                    metadata=metadata,
+                    include_metadata=True
+                )
                 
                 return transcribe_response(
-                    formats=formats_dict,
+                    formats={"markdown": markdown_content},
                     default_format="markdown",
                     source_type="audio",
                     title=filename,
@@ -1232,24 +1270,20 @@ async def convert_url(
                     os.unlink(audio_path)
         
         elif url_type == "video":
-            # Video file transcription
             import tempfile
             import os
             import requests
             
-            # Download video file
             response = requests.get(url, stream=True)
             response.raise_for_status()
             
-            # Get filename from URL
             filename = os.path.basename(urlparse(url).path)
             if not filename:
                 filename = "video"
             
-            # Determine file extension
             file_ext = Path(filename).suffix.lower()
             if not file_ext:
-                file_ext = '.mp4'  # Default
+                file_ext = '.mp4'
             
             with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -1258,23 +1292,30 @@ async def convert_url(
             
             audio_path = None
             try:
-                # Extract audio
                 audio_path = extract_audio_from_video(video_path)
                 
-                # Transcribe and generate multiple formats
-                formats_dict, metadata = transcribe_with_formats(
+                transcript, metadata = transcribe_audio_chunked(
                     audio_path,
-                    language=language if language != "auto" else None,
+                    language=language if language != "auto" else "auto",
                     model_size=model_size,
-                    device=device,
-                    cpu_threads=cpu_threads,
-                    vad_enabled=vad_enabled if vad_enabled is not None else True,
-                    output_formats=output_formats,
-                    include_timestamps=include_timestamps
+                    device="auto",
+                    cpu_threads=0,
+                    vad_enabled=True,
+                    enable_chunking=True,
+                    chunk_duration=60,
+                    chunk_overlap=2,
+                    auto_enable_threshold=90
+                )
+                
+                markdown_content = format_transcript_as_markdown(
+                    title=filename,
+                    transcript=transcript,
+                    metadata=metadata,
+                    include_metadata=True
                 )
                 
                 return transcribe_response(
-                    formats=formats_dict,
+                    formats={"markdown": markdown_content},
                     default_format="markdown",
                     source_type="video",
                     title=filename,
