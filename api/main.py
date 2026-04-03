@@ -74,7 +74,7 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.4.1",
+    version="0.5.0",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -1034,58 +1034,253 @@ async def get_transcribe_languages():
     
     return success_response(data=data)
 
-def detect_url_type(url: str, type_hint: str = "auto") -> str:
+def detect_url_type(url: str, type_hint: str = "auto") -> tuple[str, dict]:
     """
-    Detect URL type based on URL pattern or type hint.
+    Detect URL type based on HTTP Content-Type header, magic bytes, or URL pattern.
 
     Args:
         url: URL to analyze
-        type_hint: Type hint to override detection (auto/youtube/document/audio/video/webpage)
+        type_hint: Type hint to override detection
 
     Returns:
-        Detected type: youtube, document, audio, video, webpage
+        Tuple of (detected_type, metadata) where metadata may include filename from Content-Disposition
     """
-    # If type_hint is provided and not auto, use it directly
+    metadata = {}
+    
     if type_hint != "auto":
-        valid_types = ["youtube", "document", "audio", "video", "webpage"]
+        valid_types = ["youtube", "document", "audio", "video", "image", "webpage", "json", "markdown", "text"]
         if type_hint in valid_types:
-            return type_hint
-        # Invalid type_hint, fall through to auto-detection
+            return (type_hint, metadata)
 
-    # Auto-detect based on URL pattern
+    import requests
+    from urllib.parse import urlparse
+    
+    # Try to get Content-Type from headers
+    try:
+        response = requests.head(url, allow_redirects=True, timeout=10)
+        content_type = response.headers.get('Content-Type', '').lower()
+        content_disposition = response.headers.get('Content-Disposition', '').lower()
+        content_type_main = content_type.split(';')[0].strip()
+        
+        # Map Content-Type to URL type
+        type_mappings = {
+            # YouTube
+            'video/youtube': 'youtube',
+            # Document types
+            'application/pdf': 'document',
+            'application/msword': 'document',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'document',
+            'application/vnd.ms-powerpoint': 'document',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'document',
+            'application/vnd.ms-excel': 'document',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'document',
+            'application/epub+zip': 'document',
+            'application/zip': 'document',
+            'application/x-rar-compressed': 'document',
+            # Image types
+            'image/jpeg': 'image',
+            'image/jpg': 'image',
+            'image/png': 'image',
+            'image/gif': 'image',
+            'image/webp': 'image',
+            'image/bmp': 'image',
+            'image/tiff': 'image',
+            'image/svg+xml': 'image',
+            # Audio types
+            'audio/mpeg': 'audio',
+            'audio/mp3': 'audio',
+            'audio/wav': 'audio',
+            'audio/x-wav': 'audio',
+            'audio/flac': 'audio',
+            'audio/ogg': 'audio',
+            'audio/aac': 'audio',
+            'audio/x-m4a': 'audio',
+            # Video types
+            'video/mp4': 'video',
+            'video/x-matroska': 'video',
+            'video/webm': 'video',
+            'video/avi': 'video',
+            'video/quicktime': 'video',
+            'video/x-msvideo': 'video',
+            # Text-based types (new)
+            'application/json': 'json',
+            'text/json': 'json',
+            'text/markdown': 'markdown',
+            'text/x-markdown': 'markdown',
+            'text/md': 'markdown',
+            'text/plain': 'text',
+            'text/csv': 'text',
+            'text/xml': 'text',
+            'application/xml': 'text',
+            'text/css': 'text',
+            'application/javascript': 'text',
+            'text/javascript': 'text',
+            # Webpage
+            'text/html': 'webpage',
+            'application/xhtml+xml': 'webpage',
+            # Octet-stream (needs magic bytes detection)
+            'application/octet-stream': 'octet-stream',
+        }
+        
+        if content_type_main in type_mappings:
+            detected_type = type_mappings[content_type_main]
+            # If octet-stream, we need to check filename or do magic bytes
+            if detected_type == 'octet-stream':
+                # Try to get filename from Content-Disposition
+                if 'filename=' in content_disposition:
+                    import re
+                    match = re.search(r'filename[*]?=([^;]+)', content_disposition)
+                    if match:
+                        metadata['filename'] = match.group(1).strip('"\'')
+                        ext = Path(metadata['filename']).suffix.lower()
+                        type_from_ext = _detect_type_from_extension(ext)
+                        if type_from_ext:
+                            return (type_from_ext, metadata)
+                # Need magic bytes detection
+                return _detect_from_magic_bytes(url, metadata)
+            
+            return (detected_type, metadata)
+        
+        # Check Content-Disposition for filename
+        if 'filename=' in content_disposition:
+            import re
+            match = re.search(r'filename[*]?=([^;]+)', content_disposition)
+            if match:
+                metadata['filename'] = match.group(1).strip('"\'')
+                ext = Path(metadata['filename']).suffix.lower()
+                type_from_ext = _detect_type_from_extension(ext)
+                if type_from_ext:
+                    return (type_from_ext, metadata)
+        
+    except Exception:
+        pass
+    
+    # Fallback: Extension-based detection
     parsed = urlparse(url)
     domain = parsed.netloc.lower()
     path = parsed.path.lower()
 
-    # YouTube detection
     if "youtube.com" in domain or "youtu.be" in domain:
-        return "youtube"
+        return ("youtube", metadata)
 
-    # Document file extensions
-    doc_extensions = {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.odt', '.ods', '.odp'}
+    doc_extensions = {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.odt', '.ods', '.odp', '.epub', '.zip'}
     if any(path.endswith(ext) for ext in doc_extensions):
-        return "document"
+        return ("document", metadata)
 
-    # Audio file extensions
     audio_extensions = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.wma'}
     if any(path.endswith(ext) for ext in audio_extensions):
-        return "audio"
+        return ("audio", metadata)
 
-    # Video file extensions
     video_extensions = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts', '.wmv'}
     if any(path.endswith(ext) for ext in video_extensions):
-        return "video"
+        return ("video", metadata)
 
-    # Default to webpage
-    return "webpage"
+    image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.svg'}
+    if any(path.endswith(ext) for ext in image_extensions):
+        return ("image", metadata)
+
+    # Text-based extensions
+    text_extensions = {'.json', '.md', '.markdown', '.txt', '.csv', '.xml', '.css', '.js', '.html', '.htm'}
+    ext = Path(path).suffix.lower()
+    if ext in text_extensions:
+        type_from_ext = _detect_type_from_extension(ext)
+        if type_from_ext:
+            return (type_from_ext, metadata)
+
+    return ("webpage", metadata)
+
+
+def _detect_type_from_extension(ext: str) -> str:
+    """Detect type from file extension."""
+    ext = ext.lower()
+    image_exts = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.tif', '.svg'}
+    audio_exts = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.wma'}
+    video_exts = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts', '.wmv'}
+    doc_exts = {'.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls', '.odt', '.ods', '.odp', '.epub', '.zip'}
+    json_exts = {'.json'}
+    md_exts = {'.md', '.markdown'}
+    
+    if ext in image_exts:
+        return "image"
+    if ext in audio_exts:
+        return "audio"
+    if ext in video_exts:
+        return "video"
+    if ext in doc_exts:
+        return "document"
+    if ext in json_exts:
+        return "json"
+    if ext in md_exts:
+        return "markdown"
+    if ext in {'.txt', '.csv', '.xml', '.css', '.js', '.html', '.htm'}:
+        return "text"
+    return "text"
+
+
+def _detect_from_magic_bytes(url: str, metadata: dict) -> tuple[str, dict]:
+    """Detect file type from magic bytes (first few bytes)."""
+    import requests
+    
+    try:
+        # Get first 512 bytes to check magic bytes
+        response = requests.get(url, stream=True, timeout=10, headers={'Range': 'bytes=0-511'})
+        if response.status_code not in (200, 206):
+            return ("document", metadata)
+        
+        first_bytes = response.content[:512]
+        
+        # Magic bytes signatures
+        magic_signatures = {
+            # PDF
+            b'%PDF': 'document',
+            # Images
+            b'\x89PNG': 'image',
+            b'\xff\xd8\xff': 'image',  # JPEG
+            b'GIF87a': 'image',
+            b'GIF89a': 'image',
+            b'BM': 'image',
+            b'RIFF': 'image',  # WEBP
+            b'II\x2a\x00': 'image',  # TIFF
+            b'MM\x00\x2a': 'image',  # TIFF
+            # Audio
+            b'ID3': 'audio',
+            b'\xff\xfb': 'audio',  # MP3
+            b'RIFF': 'audio',  # WAV (check later)
+            b'fLaC': 'audio',  # FLAC
+            # Video
+            b'\x00\x00\x00\x18ftypmp4': 'video',
+            b'\x00\x00\x00\x1cftyp': 'video',
+            b'\x1aE\xdf\xa3': 'video',  # MKV
+            # ZIP
+            b'PK\x03\x04': 'document',
+            # Office formats (ZIP-based)
+            b'PK\x03\x04': 'document',  # DOCX, XLSX, PPTX
+        }
+        
+        for sig, file_type in magic_signatures.items():
+            if first_bytes.startswith(sig):
+                # Special case for RIFF (could be WEBP image or WAV audio)
+                if first_bytes.startswith(b'RIFF'):
+                    if b'WEBP' in first_bytes[8:20]:
+                        return ("image", metadata)
+                    elif b'WAVE' in first_bytes[8:20]:
+                        return ("audio", metadata)
+                return (file_type, metadata)
+        
+    except Exception:
+        pass
+    
+    # Default to document
+    return ("document", metadata)
 
 
 @api_router.post("/convert/url")
 async def convert_url(
     url: str = Query(..., description="URL address"),
-    type_hint: str = Query("auto", description="Type hint: auto/youtube/document/audio/video/webpage"),
+    type_hint: str = Query("auto", description="Type hint: auto/youtube/document/audio/video/image/webpage"),
     language: str = Query("auto", description="Transcription language (auto=auto-detect)"),
     model_size: str = Query("base", description="Whisper model size"),
+    ocr_mode: str = Query("auto", description="OCR mode: auto (auto-detect), true (force OCR), false (disable OCR)", pattern="^(auto|true|false)$"),
     ocr_lang: str = Query(DEFAULT_OCR_LANG, description="OCR language"),
     include_timestamps: bool = Query(False, description="Include timestamps in Markdown")
 ):
@@ -1096,6 +1291,7 @@ async def convert_url(
     - **type_hint**: Type hint (overrides auto-detection)
     - **language**: Transcription language (auto=auto-detect)
     - **model_size**: Whisper model size (tiny, base, small, medium, large)
+    - **ocr_mode**: OCR mode (auto=auto-detect, true=force OCR, false=disable OCR)
     - **ocr_lang**: OCR language (default: environment variable DEFAULT_OCR_LANG)
     - **include_timestamps**: Include timestamps in Markdown
     
@@ -1104,18 +1300,21 @@ async def convert_url(
     - document: Document conversion (PDF, DOCX, etc.)
     - audio: Audio file transcription
     - video: Video file transcription
+    - image: Image OCR (JPG, PNG, GIF, WEBP, etc.)
+    - json: JSON file (returns as code block)
+    - markdown: Markdown file (returns raw content)
+    - text: Plain text file
     - webpage: Webpage content conversion
     
     Fixed STT settings for audio/video: device=auto, cpu_threads=0, vad_enabled=true,
     enable_chunking=true, chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
     """
-    
     # Set request ID
     request_id = set_request_id()
     
     try:
-        # Detect URL type
-        url_type = detect_url_type(url, type_hint)
+        # Detect URL type (returns tuple: type, metadata)
+        url_type, type_metadata = detect_url_type(url, type_hint)
         
         if url_type == "youtube":
             lang_param = None if language == "auto" else language
@@ -1147,11 +1346,6 @@ async def convert_url(
             )
             
         elif url_type == "document":
-            # Document conversion - use MarkItDown to process URL
-            # Need to download file to temporary location
-            import tempfile
-            import os
-            import requests
             
             # Download file
             response = requests.get(url, stream=True)
@@ -1184,12 +1378,12 @@ async def convert_url(
                 tmp_path = tmp.name
             
             try:
-                # Convert using MarkItDown
-                result = md.convert(tmp_path, enable_plugins=True)
+                enable_plugins = ocr_mode == "true" or (ocr_mode == "auto")
+                
+                result = md.convert(tmp_path, enable_plugins=enable_plugins)
                 text_content = result.text_content
                 
-                # Special handling: if PDF and content is empty, try OCR
-                if file_ext == '.pdf' and (not text_content or len(text_content.strip()) < 10):
+                if file_ext == '.pdf' and enable_plugins and (not text_content or len(text_content.strip()) < 10):
                     try:
                         ocr_result = ocr_image_pdf(tmp_path, ocr_lang)
                         if ocr_result and len(ocr_result.strip()) > len(text_content.strip()):
@@ -1213,10 +1407,6 @@ async def convert_url(
                     os.unlink(tmp_path)
         
         elif url_type == "audio":
-            import tempfile
-            import os
-            import requests
-            
             response = requests.get(url, stream=True)
             response.raise_for_status()
             
@@ -1270,10 +1460,6 @@ async def convert_url(
                     os.unlink(audio_path)
         
         elif url_type == "video":
-            import tempfile
-            import os
-            import requests
-            
             response = requests.get(url, stream=True)
             response.raise_for_status()
             
@@ -1331,9 +1517,109 @@ async def convert_url(
                 if audio_path and os.path.exists(audio_path):
                     os.unlink(audio_path)
         
+        elif url_type == "image":
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+            
+            filename = os.path.basename(urlparse(url).path)
+            if not filename:
+                filename = "image"
+            
+            file_ext = Path(filename).suffix.lower()
+            if not file_ext:
+                file_ext = '.jpg'
+            
+            with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
+                for chunk in response.iter_content(chunk_size=8192):
+                    tmp.write(chunk)
+                image_path = tmp.name
+            
+            try:
+                enable_plugins = ocr_mode == "true" or (ocr_mode == "auto")
+                
+                result = md.convert(image_path, enable_plugins=enable_plugins)
+                text_content = result.text_content
+                
+                # ocr_mode=true: always run OCR
+                # ocr_mode=auto: run OCR if content is empty/short (likely scanned image)
+                # ocr_mode=false: never run OCR
+                should_ocr = ocr_mode == "true" or (
+                    ocr_mode == "auto" and 
+                    (not text_content or len(text_content.strip()) < 10 or text_content.startswith("ImageSize:"))
+                )
+                
+                if should_ocr:
+                    try:
+                        ocr_result = ocr_image(image_path, ocr_lang)
+                        if ocr_result:
+                            text_content = f"[OCR Result]\n\n{ocr_result}"
+                    except Exception as ocr_error:
+                        if API_DEBUG:
+                            print(f"Image OCR failed: {ocr_error}")
+                
+                return convert_file_response(
+                    content=text_content,
+                    format="markdown",
+                    filename=filename,
+                    file_size=os.path.getsize(image_path),
+                    conversion_time=datetime.now().isoformat(),
+                    ocr_language=ocr_lang if enable_plugins else None,
+                    request_id=request_id
+                )
+            
+            finally:
+                if os.path.exists(image_path):
+                    os.unlink(image_path)
+        
+        elif url_type == "json":
+            response = requests.get(url)
+            response.raise_for_status()
+            try:
+                json_data = response.json()
+                json_text = "```json\n" + json.dumps(json_data, indent=2, ensure_ascii=False) + "\n```"
+            except Exception:
+                json_text = response.text
+            
+            return convert_file_response(
+                content=json_text,
+                format="markdown",
+                filename=os.path.basename(urlparse(url).path) or "data.json",
+                file_size=len(response.content),
+                conversion_time=datetime.now().isoformat(),
+                ocr_language=None,
+                request_id=request_id
+            )
+        
+        elif url_type == "markdown":
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            return convert_file_response(
+                content=response.text,
+                format="markdown",
+                filename=os.path.basename(urlparse(url).path) or "document.md",
+                file_size=len(response.content),
+                conversion_time=datetime.now().isoformat(),
+                ocr_language=None,
+                request_id=request_id
+            )
+        
+        elif url_type == "text":
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            return convert_file_response(
+                content=response.text,
+                format="markdown",
+                filename=os.path.basename(urlparse(url).path) or "document.txt",
+                file_size=len(response.content),
+                conversion_time=datetime.now().isoformat(),
+                ocr_language=None,
+                request_id=request_id
+            )
+        
         elif url_type == "webpage":
             # Webpage content conversion
-            import requests
             from markitdown import MarkItDown
             
             # Download webpage content
@@ -1341,16 +1627,13 @@ async def convert_url(
             response.raise_for_status()
             
             # Create temporary HTML file
-            import tempfile
-            import os
-            
             with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
                 tmp.write(response.content)
                 html_path = tmp.name
             
             try:
-                # Convert HTML using MarkItDown
-                result = md.convert(html_path, enable_plugins=False)
+                enable_plugins = ocr_mode == "true"
+                result = md.convert(html_path, enable_plugins=enable_plugins)
                 text_content = result.text_content
                 
                 return convert_file_response(

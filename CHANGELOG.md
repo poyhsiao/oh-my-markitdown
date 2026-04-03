@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-03
+
+### Added
+
+- Comprehensive URL type detection with Content-Type header, Content-Disposition filename, extension fallback, and magic bytes detection
+- New `ocr_mode` parameter for `/api/v1/convert/url` endpoint:
+  - `auto` (default): auto-detect and run OCR when needed
+  - `true`: force OCR for all files
+  - `false`: disable OCR
+- New URL types supported:
+  - `json`: Returns JSON content as code block
+  - `markdown`: Returns raw Markdown content
+  - `text`: Returns plain text content
+  - `image`: Image OCR with configurable language
+- Magic bytes detection for octet-stream Content-Type
+- Extension-based type detection for JSON, Markdown, and text files
+
+### Changed
+
+- Refactored `detect_url_type` to return tuple `(type, metadata)` for better type info passing
+- Simplified import statements in convert_url function
+
+### Fixed
+
+- Removed redundant local imports causing UnboundLocalError
+
+---
+
 ## [0.4.1] - 2026-03-29
 
 ### Changed

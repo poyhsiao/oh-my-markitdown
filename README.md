@@ -454,8 +454,8 @@ For issues, please check:
 ---
 
 **Created by:** Kimhsiao  
-**Last Updated:** 2026-03-29  
-**Version:** 0.4.1  
+**Last Updated:** 2026-04-03  
+**Version:** 0.5.0  
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)  
 **Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
-**New Features:** YouTube transcription, Audio transcription (Faster-Whisper), GPU Acceleration (CUDA/MPS), System Management API, SDK Migration (native Python APIs)
+**New Features:** URL type detection (Content-Type, extension, magic bytes), OCR mode parameter (auto/true/false), JSON/Markdown/Text URL conversion, Image OCR support

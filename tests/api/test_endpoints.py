@@ -899,3 +899,37 @@ class TestVideoChunkingParameters:
             assert default.default == DEFAULT_AUTO_CHUNK_THRESHOLD, f"auto_chunk_threshold default should be {DEFAULT_AUTO_CHUNK_THRESHOLD}"
         else:
             assert default == DEFAULT_AUTO_CHUNK_THRESHOLD, f"auto_chunk_threshold default should be {DEFAULT_AUTO_CHUNK_THRESHOLD}"
+
+
+class TestConvertUrlOcrMode:
+    """Test /api/v1/convert/url ocr_mode parameter."""
+
+    def test_convert_url_has_ocr_mode_parameter(self):
+        from api.main import convert_url
+        import inspect
+
+        sig = inspect.signature(convert_url)
+        assert "ocr_mode" in sig.parameters
+
+    def test_ocr_mode_default_is_auto(self):
+        from api.main import convert_url
+        import inspect
+
+        sig = inspect.signature(convert_url)
+        param = sig.parameters["ocr_mode"]
+        default = param.default
+        if hasattr(default, 'default'):
+            assert default.default == "auto"
+        else:
+            assert default == "auto"
+
+    def test_ocr_mode_invalid_value_rejected(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/convert/url",
+            params={"url": "https://example.com/doc.pdf", "ocr_mode": "invalid"}
+        )
+        assert response.status_code in [400, 422]
