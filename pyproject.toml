@@ -43,6 +43,8 @@ dependencies = [
     "pytesseract>=0.3.10",
     "ffmpeg-python>=0.2.0",
     "pymupdf>=1.23.0,<1.25.0",
+    # Readability for clean HTML extraction
+    "readability-lxml>=0.8.4.1",
 ]
 
 [project.optional-dependencies]

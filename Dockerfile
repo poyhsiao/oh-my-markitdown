@@ -82,6 +82,7 @@ COPY api/youtube_grabber.py /app/api/youtube_grabber.py
 COPY api/youtube_client.py /app/api/youtube_client.py
 COPY api/audio_extractor.py /app/api/audio_extractor.py
 COPY api/ocr_client.py /app/api/ocr_client.py
+COPY api/readability_client.py /app/api/readability_client.py
 
 # 複製自動轉換腳本
 COPY api/auto_convert.py /app/api/auto_convert.py

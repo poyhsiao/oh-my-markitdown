@@ -230,6 +230,9 @@ For detailed configuration examples, see [CONFIG_GUIDE.md](CONFIG_GUIDE.md).
 | `GET` | `/api/v1/config` | View current configuration |
 | `GET` | `/api/v1/device-info` | Get compute device info (CPU/GPU) |
 | `POST` | `/api/v1/convert` | Upload file and convert |
+| `POST` | `/api/v1/convert/file` | Upload file and convert (new unified endpoint) |
+| `POST` | `/api/v1/convert/url` | Convert from URL (with `clean_html` parameter) |
+| `POST` | `/api/v1/convert/clean-html` | Extract clean article content from URL or HTML file |
 | `POST` | `/api/v1/convert/youtube` | YouTube video transcription (Faster-Whisper) |
 | `POST` | `/api/v1/convert/audio` | Audio file transcription (Faster-Whisper) |
 | `POST` | `/api/v1/convert/video` | Video file transcription (Faster-Whisper) |
@@ -291,6 +294,31 @@ curl -X POST "http://localhost:51083/api/v1/convert/video?enable_chunking=true" 
 ```
 
 For complete API documentation, see [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
+
+### Clean HTML Extraction (New in v0.6.0)
+
+Extract clean article content from web pages using Readability algorithm:
+
+```bash
+# From URL
+curl -X POST "http://localhost:51083/api/v1/convert/clean-html?url=https://example.com/article" \
+  -o output.md
+
+# From HTML file
+curl -X POST "http://localhost:51083/api/v1/convert/clean-html" \
+  -F "file=@page.html" \
+  -o output.md
+
+# File conversion with clean_html parameter
+curl -X POST "http://localhost:51083/api/v1/convert/file" \
+  -F "file=@page.html" \
+  -F "clean_html=true" \
+  -o output.md
+
+# URL conversion with clean_html parameter
+curl -X POST "http://localhost:51083/api/v1/convert/url?url=https://example.com&clean_html=true" \
+  -o output.md
+```
 
 ---
 

@@ -29,6 +29,7 @@ Complete reference for MarkItDown API endpoints.
 | `POST` | `/api/v1/convert/audio` | Audio file transcription (Faster-Whisper) |
 | `POST` | `/api/v1/convert/video` | Video file transcription (Faster-Whisper) |
 | `POST` | `/api/v1/convert/url` | Convert from URL |
+| `POST` | `/api/v1/convert/clean-html` | Extract clean content from URL or HTML file using Readability |
 | `GET` | `/api/v1/convert/languages` | Supported transcription languages |
 | `GET` | `/api/v1/admin/storage` | Query storage usage |
 | `POST` | `/api/v1/admin/cleanup` | Clean up temporary files |
@@ -56,6 +57,7 @@ Upload a file and convert it to Markdown.
 | `enable_plugins` | Boolean | No | `false` | Enable OCR for images/scanned PDFs |
 | `ocr_lang` | String | No | `chi_tra+eng` | OCR language code (combine with `+`) |
 | `return_format` | String | No | `markdown` | Response format: `markdown` or `json` |
+| `clean_html` | Boolean | No | `true` | Use Readability to clean HTML files before conversion |
 
 #### Examples
 
@@ -122,11 +124,51 @@ Convert content from a URL.
 |-----------|------|----------|-------------|
 | `url` | String | Yes | Web URL (YouTube URLs will return error) |
 | `return_format` | String | No | Response format: `markdown` or `json` |
+| `clean_html` | Boolean | No | Use Readability to clean webpage HTML before conversion (default: `true`) |
 
 #### Example
 
 ```bash
 curl -X POST "http://localhost:51083/api/v1/convert/url?url=https://example.com/article" \
+  -o output.md
+```
+
+---
+
+## Clean HTML Extraction (New in v0.5.0)
+
+### POST /api/v1/convert/clean-html
+
+Extract clean article content from a URL or uploaded HTML file using Readability algorithm, then convert to Markdown.
+
+Provide either `url` (query parameter) or `file` (multipart form). File takes precedence if both given.
+
+#### Request — URL Mode
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `url` | String | Yes | - | URL to extract content from |
+
+#### Example — URL Mode
+
+```bash
+curl -X POST "http://localhost:51083/api/v1/convert/clean-html?url=https://example.com/article" \
+  -o output.md
+```
+
+#### Request — File Mode
+
+**Content-Type:** `multipart/form-data`
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file` | File | Yes | - | HTML file to extract content from |
+
+#### Example — File Mode
+
+```bash
+curl -X POST "http://localhost:51083/api/v1/convert/clean-html" \
+  -F "file=@page.html" \
   -o output.md
 ```
 

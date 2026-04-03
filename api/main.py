@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, APIRouter
+from fastapi import FastAPI, File, UploadFile, HTTPException, Query, APIRouter, Form
 from fastapi.responses import Response, StreamingResponse
 from markitdown import MarkItDown
 import tempfile
@@ -7,9 +7,47 @@ from pathlib import Path
 from datetime import datetime
 import io
 import re
+import ipaddress
+import socket
 from urllib.parse import urlparse
 from typing import Optional
 import requests
+
+# Default headers for HTTP requests
+DEFAULT_REQUEST_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
+
+
+def _validate_url_not_private(url: str) -> None:
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Invalid URL: no hostname")
+    if hostname in ('localhost', '127.0.0.1', '0.0.0.0', '::1'):
+        raise ValueError(f"URL resolves to a private address: {hostname}")
+    try:
+        ip = socket.getaddrinfo(hostname, None)
+        for family, _, _, _, sockaddr in ip:
+            addr = sockaddr[0]
+            if ipaddress.ip_address(addr).is_private:
+                raise ValueError(f"URL resolves to a private address: {addr}")
+    except (socket.gaierror, ValueError) as e:
+        if isinstance(e, ValueError):
+            raise
+        raise ValueError(f"Could not resolve hostname: {hostname}")
+
+
+def _html_to_markdown(html_content: bytes | str) -> str:
+    from .readability_client import extract_readability
+    result = extract_readability(html_content)
+    md_converter = MarkItDown()
+    md_result = md_converter.convert_stream(
+        io.BytesIO(result["content"].encode("utf-8")),
+        file_extension=".html",
+        mime_type="text/html",
+    )
+    return md_result.text_content
 
 # Validate environment variables on startup
 from .config import validate_environment, ConfigurationError
@@ -74,7 +112,7 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.5.0",
+    version="0.6.0",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -230,7 +268,8 @@ async def convert_file_endpoint(
     file: UploadFile = File(..., description="File to convert"),
     enable_ocr: bool = Query(False, description="Enable OCR, default false"),
     ocr_lang: str = Query("chi_tra+eng", description="OCR language code, default chi_tra+eng, use + to combine multiple languages"),
-    return_format: str = Query("markdown", description="Response format: markdown or json", pattern="^(markdown|json)$")
+    return_format: str = Query("markdown", description="Response format: markdown or json", pattern="^(markdown|json)$"),
+    clean_html: str = Form("true", description="Use Readability to clean HTML before conversion (default: true)")
 ):
     """
     Upload a file and convert it to Markdown.
@@ -239,11 +278,13 @@ async def convert_file_endpoint(
     - **enable_ocr**: Enable OCR (default: false)
     - **ocr_lang**: OCR language (default: environment variable DEFAULT_OCR_LANG, supports chi_tra, chi_sim, eng, jpn, kor, tha, vie, combinable with +)
     - **return_format**: Response format (markdown or json)
+    - **clean_html**: Use Readability to clean HTML before conversion (default: true)
     
     Returns:
     - **markdown**: Returns Markdown text directly (Content-Type: text/markdown)
     - **json**: Returns JSON with metadata and content
     """
+    clean_html_bool = clean_html.lower() in ("true", "1", "yes")
     
     # Set request ID
     request_id = set_request_id()
@@ -352,8 +393,14 @@ async def convert_file_endpoint(
             if enable_plugins and ocr_lang:
                 env_vars['TESSERACT_LANG'] = ocr_lang
             
-            result = md.convert(tmp_path, enable_plugins=enable_plugins)
-            text_content = result.text_content
+            html_extensions = {'.html', '.htm'}
+            if clean_html_bool and file_ext in html_extensions:
+                with open(tmp_path, 'rb') as f:
+                    raw_html = f.read()
+                text_content = _html_to_markdown(raw_html)
+            else:
+                result = md.convert(tmp_path, enable_plugins=enable_plugins)
+                text_content = result.text_content
             
             # Special handling: If PDF content is empty or minimal, it may be a scanned PDF
             # Need to use OCR
@@ -438,14 +485,18 @@ async def convert_file_endpoint(
     finally:
         # Always release the processing slot
         manager.release(request_id)
+
+
+@api_router.post("/convert/convert")
 async def convert_file_legacy(
     file: UploadFile = File(..., description="File to convert"),
     enable_ocr: bool = Query(False, description="Enable OCR, default false"),
     ocr_lang: str = Query("chi_tra+eng", description="OCR language code, default chi_tra+eng, use + to combine multiple languages"),
-    return_format: str = Query("markdown", description="Response format: markdown or json", pattern="^(markdown|json)$")
+    return_format: str = Query("markdown", description="Response format: markdown or json", pattern="^(markdown|json)$"),
+    clean_html: str = Form("true", description="Use Readability to clean HTML before conversion (default: true)")
 ):
     """Legacy endpoint for backward compatibility. Redirects to /convert/file."""
-    return await convert_file_endpoint(file, enable_ocr, ocr_lang, return_format)
+    return await convert_file_endpoint(file, enable_ocr, ocr_lang, return_format, clean_html)
 
 
 # ==================== Whisper Transcription Endpoints ====================
@@ -1057,7 +1108,7 @@ def detect_url_type(url: str, type_hint: str = "auto") -> tuple[str, dict]:
     
     # Try to get Content-Type from headers
     try:
-        response = requests.head(url, allow_redirects=True, timeout=10)
+        response = requests.head(url, allow_redirects=True, timeout=10, headers=DEFAULT_REQUEST_HEADERS)
         content_type = response.headers.get('Content-Type', '').lower()
         content_disposition = response.headers.get('Content-Disposition', '').lower()
         content_type_main = content_type.split(';')[0].strip()
@@ -1223,7 +1274,7 @@ def _detect_from_magic_bytes(url: str, metadata: dict) -> tuple[str, dict]:
     
     try:
         # Get first 512 bytes to check magic bytes
-        response = requests.get(url, stream=True, timeout=10, headers={'Range': 'bytes=0-511'})
+        response = requests.get(url, stream=True, timeout=10, headers={**DEFAULT_REQUEST_HEADERS, 'Range': 'bytes=0-511'})
         if response.status_code not in (200, 206):
             return ("document", metadata)
         
@@ -1282,7 +1333,8 @@ async def convert_url(
     model_size: str = Query("base", description="Whisper model size"),
     ocr_mode: str = Query("auto", description="OCR mode: auto (auto-detect), true (force OCR), false (disable OCR)", pattern="^(auto|true|false)$"),
     ocr_lang: str = Query(DEFAULT_OCR_LANG, description="OCR language"),
-    include_timestamps: bool = Query(False, description="Include timestamps in Markdown")
+    include_timestamps: bool = Query(False, description="Include timestamps in Markdown"),
+    clean_html: bool = Query(True, description="Use Readability to clean HTML before conversion (default: true)")
 ):
     """
     Unified URL endpoint - auto-detects URL type and processes accordingly.
@@ -1348,7 +1400,7 @@ async def convert_url(
         elif url_type == "document":
             
             # Download file
-            response = requests.get(url, stream=True)
+            response = requests.get(url, stream=True, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
             # Get filename from URL
@@ -1407,7 +1459,7 @@ async def convert_url(
                     os.unlink(tmp_path)
         
         elif url_type == "audio":
-            response = requests.get(url, stream=True)
+            response = requests.get(url, stream=True, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
             filename = os.path.basename(urlparse(url).path)
@@ -1460,7 +1512,7 @@ async def convert_url(
                     os.unlink(audio_path)
         
         elif url_type == "video":
-            response = requests.get(url, stream=True)
+            response = requests.get(url, stream=True, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
             filename = os.path.basename(urlparse(url).path)
@@ -1518,7 +1570,7 @@ async def convert_url(
                     os.unlink(audio_path)
         
         elif url_type == "image":
-            response = requests.get(url, stream=True)
+            response = requests.get(url, stream=True, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
             filename = os.path.basename(urlparse(url).path)
@@ -1572,7 +1624,7 @@ async def convert_url(
                     os.unlink(image_path)
         
         elif url_type == "json":
-            response = requests.get(url)
+            response = requests.get(url, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             try:
                 json_data = response.json()
@@ -1591,7 +1643,7 @@ async def convert_url(
             )
         
         elif url_type == "markdown":
-            response = requests.get(url)
+            response = requests.get(url, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
             return convert_file_response(
@@ -1605,7 +1657,7 @@ async def convert_url(
             )
         
         elif url_type == "text":
-            response = requests.get(url)
+            response = requests.get(url, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
             return convert_file_response(
@@ -1619,36 +1671,36 @@ async def convert_url(
             )
         
         elif url_type == "webpage":
-            # Webpage content conversion
-            from markitdown import MarkItDown
-            
             # Download webpage content
-            response = requests.get(url)
+            response = requests.get(url, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
-            # Create temporary HTML file
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
-                tmp.write(response.content)
-                html_path = tmp.name
-            
-            try:
-                enable_plugins = ocr_mode == "true"
-                result = md.convert(html_path, enable_plugins=enable_plugins)
-                text_content = result.text_content
+            if clean_html:
+                html_content = response.content
+                text_content = _html_to_markdown(html_content)
+            else:
+                # Create temporary HTML file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".html") as tmp:
+                    tmp.write(response.content)
+                    html_path = tmp.name
                 
-                return convert_file_response(
-                    content=text_content,
-                    format="markdown",
-                    filename=os.path.basename(urlparse(url).path) or "webpage",
-                    file_size=len(response.content),
-                    conversion_time=datetime.now().isoformat(),
-                    ocr_language=None,
-                    request_id=request_id
-                )
+                try:
+                    enable_plugins = ocr_mode == "true"
+                    result = md.convert(html_path, enable_plugins=enable_plugins)
+                    text_content = result.text_content
+                finally:
+                    if os.path.exists(html_path):
+                        os.unlink(html_path)
             
-            finally:
-                if os.path.exists(html_path):
-                    os.unlink(html_path)
+            return convert_file_response(
+                content=text_content,
+                format="markdown",
+                filename=os.path.basename(urlparse(url).path) or "webpage",
+                file_size=len(response.content),
+                conversion_time=datetime.now().isoformat(),
+                ocr_language=None,
+                request_id=request_id
+            )
         
         else:
             raise HTTPException(
@@ -1678,6 +1730,99 @@ async def convert_url(
                 message=f"URL processing failed: {str(e)}",
                 request_id=request_id
             )
+        )
+
+
+@api_router.post("/convert/clean-html", status_code=200)
+async def convert_clean_html(
+    url: Optional[str] = Query(None, description="URL to fetch and clean"),
+    file: Optional[UploadFile] = File(None, description="HTML file to clean"),
+):
+    request_id = set_request_id()
+
+    try:
+        if file is not None:
+            html_content = await file.read()
+            filename = file.filename or "clean-html"
+        elif url:
+            try:
+                _validate_url_not_private(url)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_response(
+                        code=ErrorCodes.INTERNAL_ERROR,
+                        message=str(e),
+                        request_id=request_id,
+                    ),
+                )
+
+            response = requests.get(url, timeout=30, headers=DEFAULT_REQUEST_HEADERS)
+
+            if response.status_code == 404:
+                raise HTTPException(
+                    status_code=404,
+                    detail=error_response(
+                        code=ErrorCodes.INTERNAL_ERROR,
+                        message=f"URL not found (404): {url}",
+                        request_id=request_id,
+                    ),
+                )
+
+            if len(response.content) < 500:
+                raise HTTPException(
+                    status_code=400,
+                    detail=error_response(
+                        code=ErrorCodes.INTERNAL_ERROR,
+                        message="URL returned insufficient content (likely empty or JavaScript-heavy page)",
+                        request_id=request_id,
+                    ),
+                )
+
+            response.raise_for_status()
+            html_content = response.content
+            filename = os.path.basename(urlparse(url).path) or "clean-html"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=error_response(
+                    code=ErrorCodes.INTERNAL_ERROR,
+                    message="Either 'url' or 'file' parameter is required",
+                    request_id=request_id,
+                ),
+            )
+
+        markdown_content = _html_to_markdown(html_content)
+
+        return convert_file_response(
+            content=markdown_content,
+            format="markdown",
+            filename=filename,
+            file_size=len(html_content),
+            conversion_time=datetime.now().isoformat(),
+            ocr_language=None,
+            request_id=request_id,
+        )
+
+    except HTTPException:
+        raise
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=400,
+            detail=error_response(
+                code=ErrorCodes.INTERNAL_ERROR,
+                message=f"Failed to fetch URL: {str(e)}",
+                request_id=request_id,
+            ),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=error_response(
+                code=ErrorCodes.INTERNAL_ERROR,
+                message=f"Clean HTML extraction failed: {str(e)}",
+                request_id=request_id,
+            ),
         )
 
 

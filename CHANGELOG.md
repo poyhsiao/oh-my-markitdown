@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-03
+
+### Added
+
+- New `/api/v1/convert/clean-html` endpoint — extract clean article content from URL or uploaded HTML file using Readability
+- New `clean_html` parameter for `/api/v1/convert/file` and `/api/v1/convert/url` endpoints (default: `true`)
+  - `true`: use Readability to clean HTML before conversion (removes nav, header, footer, aside)
+  - `false`: direct HTML-to-Markdown conversion (preserves all content)
+- SSRF protection for URL-based endpoints — blocks requests to private/internal IP addresses
+- `readability-lxml` dependency for article content extraction
+
+### Fixed
+
+- Added User-Agent headers to all HTTP requests to prevent blocking by websites
+- Fixed legacy `/api/v1/convert/convert` endpoint missing route decorator
+- Fixed missing timeout/headers on several `requests.get()` calls in `/api/v1/convert/url`
+
+### Changed
+
+- Extracted HTML-to-Markdown conversion to shared `_html_to_markdown()` helper function
+- Updated API documentation with new endpoints and parameters
+
+---
+
 ## [0.5.0] - 2026-04-03
 
 ### Added
