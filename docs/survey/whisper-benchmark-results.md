@@ -2,7 +2,7 @@
 
 > **Date:** 2026-04-05
 > **Author:** Kimhsiao
-> **Status:** 待實施
+> **Status:** ✅ 優化已完成（2026-04-05 更新）
 > **Based on:** Actual Docker benchmark results
 
 ---
@@ -161,13 +161,51 @@ async def startup():
 
 ---
 
-## 七、總結
+## 七、優化後 Benchmark 結果
 
-已完成 5 個 Phases 的基礎建設：
+### 7.1 實施的優化項
+
+| # | 優化項 | 狀態 | 實際效果 |
+|---|--------|------|---------|
+| 1 | 模型預熱 | ✅ | 啟動時載入 tiny + base，冷啟動消除（快取後 48ms） |
+| 2 | 並行閾值調整 | ✅ | 1-3 chunks 序列，4-6 chunks 2 workers，7+ chunks 4 workers |
+| 3 | Chunk 長度優化 | ✅ | <5min: 60s, 5-30min: 90s, >30min: 120s |
+
+### 7.2 最終 Benchmark 比較
+
+#### 30 秒音訊
+
+| 測試 | 總時間 | 模型載入 | 轉錄時間 |
+|------|--------|---------|---------|
+| Before (cached) | 296ms | 58ms | 209ms |
+| After (cached) | **305ms** | 65ms | 214ms |
+
+#### 120 秒音訊
+
+| 測試 | 總時間 | 模型載入 | 轉錄時間 | Chunk 數 |
+|------|--------|---------|---------|---------|
+| Before (old, sequential) | 2515ms | 1707ms | 741ms | 2 (序列) |
+| After (optimized) | **753ms** | 48ms | 657ms | 3 (動態並行) |
+
+**120s 加速比：3.3x（2515ms → 753ms）**
+**模型載入加速比：35x（1707ms → 48ms）**
+
+### 7.3 測試覆蓋
+
+- 12 個新增單元測試（pre-warm, parallel threshold, dynamic chunk length）
+- 198 個單元測試全部通過，8 個跳過（torch 未安裝）
+
+---
+
+## 八、總結
+
+已完成 5 個 Phases + 3 項 benchmark 優化：
 - ✅ 常數優化、API 參數暴露
 - ✅ 後端抽象層（faster-whisper + whispercpp）
-- ✅ 並行 chunking 基礎
+- ✅ 並行 chunking 基礎 + 動態閾值
 - ✅ Docker GPU 部署
 - ✅ 自動模型選擇、效能監控
+- ✅ **模型預熱**（啟動時載入 tiny + base）
+- ✅ **動態 chunk 長度**（60s/90s/120s）
 
-**下一步：** 根據實際 benchmark 結果進行微調（模型預熱、並行閾值、chunk 長度），以獲得最佳效能。
+**最終效果：120s 音訊 3.3x 加速，模型載入 35x 加速。**
