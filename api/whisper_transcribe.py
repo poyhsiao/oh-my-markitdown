@@ -47,6 +47,7 @@ from .chunking import (
     cleanup_chunks,
     estimate_processing_time,
     get_chunking_recommendation,
+    get_dynamic_max_workers,
 )
 from .subtitles import format_multiline_output, format_transcript_with_timestamps
 
@@ -951,8 +952,8 @@ Returns:
     if not chunks:
         raise RuntimeError("Failed to create audio chunks")
     
-    # Process chunks in parallel using ThreadPoolExecutor
-    max_workers = min(4, len(chunks))
+    # Process chunks with dynamic parallelism based on chunk count
+    max_workers = get_dynamic_max_workers(len(chunks))
     chunk_results_map: Dict[int, dict] = {}
     
     def process_single_chunk(chunk, idx):
@@ -978,11 +979,16 @@ Returns:
                 'error': str(e),
             })
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(process_single_chunk, chunk, i): i for i, chunk in enumerate(chunks)}
-        for future in concurrent.futures.as_completed(futures):
-            idx, result = future.result()
+    if max_workers <= 1:
+        for i, chunk in enumerate(chunks):
+            idx, result = process_single_chunk(chunk, i)
             chunk_results_map[idx] = result
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(process_single_chunk, chunk, i): i for i, chunk in enumerate(chunks)}
+            for future in concurrent.futures.as_completed(futures):
+                idx, result = future.result()
+                chunk_results_map[idx] = result
     
     chunk_results = [chunk_results_map[i] for i in range(len(chunks))]
     

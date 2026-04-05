@@ -134,3 +134,23 @@ DEFAULT_CHUNK_LENGTH_S = 30
 DEFAULT_MAX_WORKERS = 4
 MIN_MAX_WORKERS = 1
 MAX_MAX_WORKERS = 8
+
+# ===== Parallel Chunking Threshold =====
+# Minimum number of chunks before parallel processing is worthwhile
+PARALLEL_MIN_CHUNKS = 4
+
+# Dynamic max_workers based on chunk count: (min_chunks, max_workers)
+PARALLEL_MAX_WORKERS_TABLE = [
+    (1, 1),   # 1 chunk: no parallel
+    (2, 1),   # 2-3 chunks: sequential (overhead > benefit)
+    (4, 2),   # 4-6 chunks: 2 workers
+    (7, 4),   # 7+ chunks: 4 workers
+]
+
+# ===== Model Pre-warm Configuration =====
+# Models to pre-load at startup to eliminate cold-start latency
+# Format: (model_size, device, compute_type, cpu_threads)
+PRE_WARM_MODELS = [
+    ("tiny", "cpu", "int8", 8),
+    ("base", "cpu", "int8", 8),
+]

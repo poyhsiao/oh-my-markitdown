@@ -21,6 +21,39 @@ from typing import List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 
+def get_dynamic_max_workers(num_chunks: int) -> int:
+    """Calculate optimal max_workers based on number of chunks.
+    
+    Strategy:
+    - 1 chunk: no parallel (direct transcription)
+    - 2-3 chunks: sequential (ThreadPoolExecutor overhead > benefit)
+    - 4-6 chunks: 2 workers (moderate parallelism)
+    - 7+ chunks: 4 workers (full parallelism)
+    """
+    from api.constants import PARALLEL_MAX_WORKERS_TABLE, MAX_MAX_WORKERS
+    
+    result = 1
+    for min_chunks, workers in PARALLEL_MAX_WORKERS_TABLE:
+        if num_chunks >= min_chunks:
+            result = workers
+    return min(result, MAX_MAX_WORKERS)
+
+
+def get_dynamic_chunk_duration(duration: float) -> int:
+    """Calculate optimal chunk duration based on audio length.
+    
+    Strategy:
+    - < 300s: 60s chunks (default)
+    - 300-1800s: 90s chunks (fewer chunks for medium audio)
+    - > 1800s: 120s chunks (minimize overhead for long audio)
+    """
+    if duration < 300:
+        return 60
+    elif duration <= 1800:
+        return 90
+    return 120
+
+
 @dataclass
 class ChunkConfig:
     """Configuration for chunking strategy."""
