@@ -31,7 +31,10 @@ from .constants import (
     DEFAULT_AUTO_CHUNK_THRESHOLD,
     MAX_TOTAL_DURATION,
     MIN_CHUNK_DURATION,
+    DEFAULT_CHUNK_BEAM_SIZE,
+    DEFAULT_CHUNK_TEMPERATURE,
 )
+import concurrent.futures
 from .chunking import (
     ChunkConfig,
     AudioChunk,
@@ -853,6 +856,8 @@ def transcribe_audio_chunked(
     chunk_duration: int = DEFAULT_CHUNK_DURATION,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
     auto_enable_threshold: int = DEFAULT_AUTO_CHUNK_THRESHOLD,
+    beam_size: int = DEFAULT_CHUNK_BEAM_SIZE,
+    temperature: float = DEFAULT_CHUNK_TEMPERATURE,
 ) -> Tuple[str, dict]:
     """
     Transcribe audio with optional chunking for long files.
@@ -946,23 +951,24 @@ Returns:
     if not chunks:
         raise RuntimeError("Failed to create audio chunks")
     
-    # Process each chunk
-    chunk_results = []
-    for chunk in chunks:
+    # Process chunks in parallel using ThreadPoolExecutor
+    max_workers = min(4, len(chunks))
+    chunk_results_map: Dict[int, dict] = {}
+    
+    def process_single_chunk(chunk, idx):
         try:
             result = transcribe_chunk(
                 chunk=chunk,
                 model=model,
                 language=None if language == "auto" else language,
-                beam_size=5,
+                beam_size=beam_size,
                 vad_filter=vad_enabled,
-                temperature=0.0,
+                temperature=temperature,
             )
-            
-            chunk_results.append(result)
+            return (idx, result)
         except Exception as e:
-            chunk_results.append({
-                'segments': [],  # Required for merge_transcription_results
+            return (idx, {
+                'segments': [],
                 'text': '',
                 'language': 'unknown',
                 'language_probability': 0.0,
@@ -971,6 +977,14 @@ Returns:
                 'chunk_end': chunk.end_time,
                 'error': str(e),
             })
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_single_chunk, chunk, i): i for i, chunk in enumerate(chunks)}
+        for future in concurrent.futures.as_completed(futures):
+            idx, result = future.result()
+            chunk_results_map[idx] = result
+    
+    chunk_results = [chunk_results_map[i] for i in range(len(chunks))]
     
     # Merge results
     merged = merge_transcription_results(
