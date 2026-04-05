@@ -525,38 +525,50 @@ from .constants import (
 async def transcribe_youtube(
     url: str = Query(..., description="YouTube video URL"),
     language: str = Query("zh", description="Language code (zh, en, ja, ko, etc.)"),
-    model_size: str = Query("base", description="Model size (tiny, base, small, medium, large)"),
+    model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
     return_format: str = Query("markdown", description="Response format: markdown or json"),
     include_timestamps: bool = Query(False, description="Include timestamps"),
     include_metadata: bool = Query(True, description="Include metadata"),
     prefer_subtitles: bool = Query(True, description="Prefer YouTube subtitles if available (faster)"),
-    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)")
+    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)"),
+    quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
+    beam_size: int = Query(None, description="Beam search size (1=speed, 5=quality). Overrides quality_mode."),
+    temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
+    use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
+    batch_size: int = Query(8, description="Batch size for batched inference"),
+    device: str = Query("auto", description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)")
 ):
     """
     Download YouTube video audio and transcribe using Whisper.
-    
+
     Uses hybrid strategy for speed optimization:
     - **Fast path**: Uses YouTube subtitles if available (2-5 seconds)
     - **Slow path**: Uses Whisper transcription (30-60 minutes for 1hr video)
-    
+
     **Parameters:**
     - **url**: YouTube video URL
     - **language**: Language code (zh=Chinese, en=English, ja=Japanese, ko=Korean)
-    - **model_size**: Model size (tiny fastest, large most accurate)
+    - **model_size**: Model size (auto, tiny, base, small, medium, large)
     - **return_format**: Response format (markdown or json)
     - **include_timestamps**: Include timestamps in transcript
     - **include_metadata**: Include transcription metadata
     - **prefer_subtitles**: Prefer YouTube subtitles if available (faster, default: true)
     - **fast_mode**: Enable fast mode with optimizations for Whisper path
-    
+    - **quality_mode**: Quality preset (speed, balanced, quality)
+    - **beam_size**: Beam search size (1=speed, 5=quality). Overrides quality_mode.
+    - **temperature**: Sampling temperature (0.0=greedy). Overrides quality_mode.
+    - **use_batched**: Use BatchedInferencePipeline (auto-detect if None)
+    - **batch_size**: Batch size for batched inference
+    - **device**: Compute device (auto, cpu, cuda, mps, rocm)
+    - **cpu_threads**: CPU thread count (auto-detect if None)
+
     **Response metadata fields (new in v0.3.0):**
     - **source**: "youtube_subtitles" or "whisper" - indicates transcription source
     - **is_auto_generated**: boolean - whether subtitles are auto-generated (for subtitle source)
     - **processing_time_ms**: integer - processing time in milliseconds
-    
+
     **Fixed settings:**
-    - device: auto (auto-detect CPU/GPU)
-    - cpu_threads: 0 (auto-detect)
     - vad_enabled: true
     """
     
@@ -648,21 +660,35 @@ async def transcribe_youtube(
 async def transcribe_audio_file(
     file: UploadFile = File(..., description="Audio file"),
     language: str = Query("zh", description="Language code"),
-    model_size: str = Query("base", description="Model size"),
+    model_size: str = Query("auto", description="Model size"),
     return_format: str = Query("markdown", description="Response format"),
-    include_timestamps: bool = Query(False, description="Include timestamps")
+    include_timestamps: bool = Query(False, description="Include timestamps"),
+    quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
+    beam_size: int = Query(None, description="Beam search size (1=speed, 5=quality). Overrides quality_mode."),
+    temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
+    use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
+    batch_size: int = Query(8, description="Batch size for batched inference"),
+    device: str = Query("auto", description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)")
 ):
     """
     Upload audio file and transcribe using Whisper with chunking support.
-    
+
     - **file**: Audio file (MP3, WAV, M4A, FLAC, etc.)
     - **language**: Language code
-    - **model_size**: Model size (tiny, base, small, medium, large)
+    - **model_size**: Model size (auto, tiny, base, small, medium, large)
     - **return_format**: Response format (markdown or json)
     - **include_timestamps**: Include timestamps
-    
-    Fixed STT settings: device=auto, cpu_threads=0, vad_enabled=true,
-    enable_chunking=true, chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
+    - **quality_mode**: Quality preset (speed, balanced, quality)
+    - **beam_size**: Beam search size (1=speed, 5=quality). Overrides quality_mode.
+    - **temperature**: Sampling temperature (0.0=greedy). Overrides quality_mode.
+    - **use_batched**: Use BatchedInferencePipeline (auto-detect if None)
+    - **batch_size**: Batch size for batched inference
+    - **device**: Compute device (auto, cpu, cuda, mps, rocm)
+    - **cpu_threads**: CPU thread count (auto-detect if None)
+
+    Fixed STT settings: vad_enabled=true, enable_chunking=true,
+    chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
     """
     
     try:
@@ -734,19 +760,35 @@ async def transcribe_audio_file(
 async def transcribe_video_file(
     file: UploadFile = File(..., description="Video file"),
     language: str = Query("zh", description="Language code"),
-    model_size: str = Query("base", description="Model size"),
-    include_timestamps: bool = Query(False, description="Include timestamps")
+    model_size: str = Query("auto", description="Model size"),
+    return_format: str = Query("markdown", description="Response format"),
+    include_timestamps: bool = Query(False, description="Include timestamps"),
+    quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
+    beam_size: int = Query(None, description="Beam search size (1=speed, 5=quality). Overrides quality_mode."),
+    temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
+    use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
+    batch_size: int = Query(8, description="Batch size for batched inference"),
+    device: str = Query("auto", description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)")
 ):
     """
     Upload video file and transcribe using Whisper.
-    
+
     - **file**: Video file (MP4, MKV, WebM, AVI, MOV, FLV, TS)
     - **language**: Language code
-    - **model_size**: Model size (tiny, base, small, medium, large)
+    - **model_size**: Model size (auto, tiny, base, small, medium, large)
+    - **return_format**: Response format (markdown or json)
     - **include_timestamps**: Include timestamps in Markdown
-    
-    Fixed STT settings: device=auto, cpu_threads=0, vad_enabled=true,
-    enable_chunking=true, chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
+    - **quality_mode**: Quality preset (speed, balanced, quality)
+    - **beam_size**: Beam search size (1=speed, 5=quality). Overrides quality_mode.
+    - **temperature**: Sampling temperature (0.0=greedy). Overrides quality_mode.
+    - **use_batched**: Use BatchedInferencePipeline (auto-detect if None)
+    - **batch_size**: Batch size for batched inference
+    - **device**: Compute device (auto, cpu, cuda, mps, rocm)
+    - **cpu_threads**: CPU thread count (auto-detect if None)
+
+    Fixed STT settings: vad_enabled=true, enable_chunking=true,
+    chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
     """
     
     allowed_video_extensions = {

@@ -78,9 +78,9 @@ SUBTITLE_LANG_PRIORITY = [
 SUBTITLE_DOWNLOAD_TIMEOUT = 120  # 2 minutes for downloading subtitles
 
 # ===== VAD Parameters =====
-DEFAULT_VAD_MIN_SILENCE_MS = 300
-DEFAULT_VAD_THRESHOLD = 0.6
-DEFAULT_VAD_SPEECH_PAD_MS = 200
+DEFAULT_VAD_MIN_SILENCE_MS = 500
+DEFAULT_VAD_THRESHOLD = 0.5
+DEFAULT_VAD_SPEECH_PAD_MS = 300
 
 # ===== Audio Extraction Parameters =====
 AUDIO_SAMPLE_RATE = 16000           # 16kHz (Whisper native)
@@ -91,7 +91,7 @@ AUDIO_FFMPEG_THREADS = 4            # FFmpeg thread count
 # ===== CPU Threading =====
 MAX_CPU_THREADS = 8
 MIN_CPU_THREADS = 1
-DEFAULT_CPU_THREADS = 4
+DEFAULT_CPU_THREADS = 8
 
 # ===== Model Selection Thresholds (seconds) =====
 MODEL_SELECTION_THRESHOLDS = {
@@ -111,8 +111,26 @@ COMPUTE_TYPE_BY_DEVICE = {
 # ===== Chunking Configuration =====
 # For handling long audio/video files that may cause Cloudflare 524 timeout
 # Cloudflare has a 100-second timeout limit for proxied requests
-DEFAULT_CHUNK_DURATION = 60           # Max duration per chunk (seconds)
-DEFAULT_CHUNK_OVERLAP = 2             # Overlap between chunks (seconds)
-DEFAULT_AUTO_CHUNK_THRESHOLD = 90    # Auto-enable chunking above this duration (100s - 10s buffer)
-MAX_TOTAL_DURATION = 7200            # Max total processing time (2 hours)
-MIN_CHUNK_DURATION = 10              # Minimum chunk duration (seconds)
+DEFAULT_CHUNK_DURATION = 60 # Max duration per chunk (seconds)
+DEFAULT_CHUNK_OVERLAP = 2 # Overlap between chunks (seconds)
+DEFAULT_AUTO_CHUNK_THRESHOLD = 90 # Auto-enable chunking above this duration (100s - 10s buffer)
+MAX_TOTAL_DURATION = 7200 # Max total processing time (2 hours)
+MIN_CHUNK_DURATION = 10 # Minimum chunk duration (seconds)
+
+# ===== Whisper Quality Presets =====
+QUALITY_PRESETS = {
+    "speed": {"beam_size": 1, "temperature": 0.0},
+    "balanced": {"beam_size": 3, "temperature": 0.0},
+    "quality": {"beam_size": 5, "temperature": 0.0},
+}
+
+# ===== Chunk Transcription Settings =====
+DEFAULT_CHUNK_BEAM_SIZE = 1
+DEFAULT_CHUNK_TEMPERATURE = 0.0
+DEFAULT_BATCH_SIZE = 8
+DEFAULT_CHUNK_LENGTH_S = 30
+
+# ===== Worker Configuration =====
+DEFAULT_MAX_WORKERS = 4
+MIN_MAX_WORKERS = 1
+MAX_MAX_WORKERS = 8
