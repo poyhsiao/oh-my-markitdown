@@ -425,10 +425,10 @@ def estimate_processing_time(duration: float, model_size: str = "base") -> float
 def get_chunking_recommendation(duration: float) -> dict:
     """
     Get recommendation for chunking settings based on duration.
-    
+
     Args:
         duration: Audio/video duration in seconds
-        
+
     Returns:
         Dictionary with recommended settings
     """
@@ -460,3 +460,88 @@ def get_chunking_recommendation(duration: float) -> dict:
             'suggested_overlap': 2,
             'estimated_chunks': int(duration / 60) + 1
         }
+
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def transcribe_audio_parallel(
+    audio_path: str,
+    language: str,
+    model,
+    beam_size: int = 1,
+    vad_filter: bool = True,
+    temperature: float = 0.0,
+    max_workers: int = 4,
+    chunk_config: ChunkConfig | None = None,
+) -> dict:
+    """Transcribe audio with parallel chunk processing.
+
+    Splits audio into chunks, processes each chunk in parallel, and merges
+    results ordered by timestamp.
+
+    Args:
+        audio_path: Path to audio file
+        language: Language code for transcription
+        model: FasterWhisper model instance
+        beam_size: Beam search size
+        vad_filter: Whether to use VAD filter
+        temperature: Sampling temperature
+        max_workers: Maximum number of parallel workers
+        chunk_config: Chunking configuration (uses defaults if None)
+
+    Returns:
+        Merged transcription result dictionary
+    """
+    if chunk_config is None:
+        chunk_config = ChunkConfig()
+
+    chunks = split_audio_into_chunks(audio_path, chunk_config)
+
+    if not chunks:
+        from api.chunking import get_audio_duration
+
+        duration = get_audio_duration(audio_path)
+        whole_chunk = AudioChunk(
+            chunk_id=0,
+            start_time=0,
+            end_time=duration,
+            file_path=audio_path,
+            duration=duration,
+            overlap_with_previous=0,
+        )
+        return transcribe_chunk(
+            chunk=whole_chunk,
+            model=model,
+            language=language,
+            beam_size=beam_size,
+            vad_filter=vad_filter,
+            temperature=temperature,
+        )
+
+    max_w = min(max_workers, len(chunks))
+    chunk_results = []
+
+    with ThreadPoolExecutor(max_workers=max_w) as executor:
+        futures = {
+            executor.submit(
+                transcribe_chunk,
+                chunk=chunk,
+                model=model,
+                language=language,
+                beam_size=beam_size,
+                vad_filter=vad_filter,
+                temperature=temperature,
+            ): chunk
+            for chunk in chunks
+        }
+
+        for future in as_completed(futures):
+            chunk_results.append(future.result())
+
+    merged = merge_transcription_results(
+        chunk_results, overlap_duration=chunk_config.overlap_duration
+    )
+    cleanup_chunks(chunks)
+
+    return merged
