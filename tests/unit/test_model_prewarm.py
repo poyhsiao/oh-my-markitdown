@@ -7,27 +7,23 @@ class TestModelPreWarm:
     """Test model pre-warming at startup."""
 
     @patch("api.main.get_model")
-    def test_startup_pre_warms_models(self, mock_get_model):
-        """Startup event should pre-warm tiny and base models."""
-        from api.main import startup_event
-        startup_event()
-        # Should pre-warm at least tiny and base models
+    def test_prewarm_loads_all_models(self, mock_get_model):
+        """sync_prewarm_models should load all models in PRE_WARM_MODELS."""
+        from api.main import sync_prewarm_models
+        sync_prewarm_models()
         assert mock_get_model.call_count >= 2
         call_args = [call[0][0] for call in mock_get_model.call_args_list]
         assert "tiny" in call_args
         assert "base" in call_args
 
     @patch("api.main.get_model")
-    def test_pre_warm_uses_cpu_and_int8(self, mock_get_model):
+    def test_prewarm_uses_cpu_and_int8(self, mock_get_model):
         """Pre-warmed models should use CPU and int8 by default."""
-        from api.main import startup_event
-        startup_event()
-        # Check that cpu_threads and compute_type are passed correctly
+        from api.main import sync_prewarm_models
+        sync_prewarm_models()
         for call in mock_get_model.call_args_list:
             kwargs = call[1] if call[1] else {}
-            # device should be cpu (default)
             assert kwargs.get("device", "cpu") == "cpu"
-            # compute_type should be int8 (default)
             assert kwargs.get("compute_type", "int8") == "int8"
 
 

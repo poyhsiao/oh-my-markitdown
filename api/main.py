@@ -1878,21 +1878,16 @@ from .constants import PRE_WARM_MODELS
 from .whisper_transcribe import get_model
 
 
-def startup_event():
-    """Pre-warm commonly used Whisper models to eliminate cold-start latency."""
-    import threading
-
-    def _pre_warm():
-        for model_size, device, compute_type, cpu_threads in PRE_WARM_MODELS:
-            try:
-                get_model(model_size, device, compute_type, cpu_threads=cpu_threads)
-            except Exception:
-                pass
-
-    threading.Thread(target=_pre_warm, daemon=True).start()
+def sync_prewarm_models():
+    """Synchronously pre-warm models to eliminate cold-start latency."""
+    for model_size, device, compute_type, cpu_threads in PRE_WARM_MODELS:
+        try:
+            get_model(model_size, device, compute_type, cpu_threads=cpu_threads)
+        except Exception:
+            pass
 
 
-startup_event()
+sync_prewarm_models()
 
 if __name__ == "__main__":
     import uvicorn

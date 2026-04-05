@@ -1,5 +1,5 @@
 """Faster-Whisper backend implementation. Supports CPU, CUDA, and ROCm devices."""
-from typing import Iterator
+from typing import Iterator, Any
 
 from faster_whisper import WhisperModel
 from faster_whisper import BatchedInferencePipeline
@@ -18,7 +18,7 @@ class FasterWhisperBackend(TranscriptionBackend):
         self.supports_batched = True
         self._model_cache = model_cache or _model_cache
         self._base_model: WhisperModel | None = None
-        self._batched_model: BatchedInferencePipeline | None = None
+        self._batched_model: Any = None
 
     def _get_supported_compute_types(self) -> list[str]:
         if self.device == "cpu":
@@ -37,7 +37,7 @@ class FasterWhisperBackend(TranscriptionBackend):
         cached = self._model_cache.get(cache_key)
         if cached is not None:
             if use_batched:
-                self._batched_model = cached
+                self._batched_model = cached  # type: ignore[assignment]
             else:
                 self._base_model = cached
             return
@@ -52,7 +52,7 @@ class FasterWhisperBackend(TranscriptionBackend):
         if use_batched:
             batched_model = BatchedInferencePipeline(model=base_model)
             self._batched_model = batched_model
-            self._model_cache.set(cache_key, batched_model)
+            self._model_cache.set(cache_key, batched_model)  # type: ignore[arg-type]
         else:
             self._base_model = base_model
             self._model_cache.set(cache_key, base_model)
@@ -80,7 +80,7 @@ class FasterWhisperBackend(TranscriptionBackend):
             vad_parameters=vad_params if vad_filter else None,
             word_timestamps=word_timestamps,
         )
-        return segments, info
+        return segments, info  # type: ignore[return-value]
 
     def transcribe_batched(
         self,
@@ -102,14 +102,14 @@ class FasterWhisperBackend(TranscriptionBackend):
             audio_path,
             language=language,
             batch_size=batch_size,
-            chunk_length_s=chunk_length_s,
+            chunk_length=chunk_length_s,
             beam_size=beam_size,
             temperature=temperature,
             vad_filter=vad_filter,
             vad_parameters=vad_params if vad_filter else None,
             word_timestamps=word_timestamps,
         )
-        return segments, info
+        return segments, info  # type: ignore[return-value]
 
     def unload(self) -> None:
         self._base_model = None

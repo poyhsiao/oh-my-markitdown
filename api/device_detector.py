@@ -3,11 +3,11 @@ import os
 import platform
 
 try:
-    import torch
+    import torch  # type: ignore[import-untyped]
 
     _TORCH_AVAILABLE = True
 except ImportError:
-    torch = None
+    torch = None  # type: ignore[assignment]
     _TORCH_AVAILABLE = False
 
 
@@ -17,7 +17,7 @@ class DeviceDetector:
     @staticmethod
     def detect() -> str:
         """Detect primary compute device. Priority: CUDA > ROCm > MPS > CPU."""
-        if _TORCH_AVAILABLE and torch.cuda.is_available():
+        if _TORCH_AVAILABLE and torch.cuda.is_available():  # type: ignore[union-attr]
             return "cuda"
 
         if os.environ.get("ROCM_PATH") or os.environ.get("HIP_VISIBLE_DEVICES"):
@@ -33,7 +33,7 @@ class DeviceDetector:
         """Returns all available devices in priority order."""
         devices = []
 
-        if _TORCH_AVAILABLE and torch.cuda.is_available():
+        if _TORCH_AVAILABLE and torch.cuda.is_available():  # type: ignore[union-attr]
             devices.append("cuda")
 
         if os.environ.get("ROCM_PATH"):

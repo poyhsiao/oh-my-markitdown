@@ -1,10 +1,10 @@
 """Whisper.cpp backend implementation for Apple Silicon (MPS)."""
-from typing import Iterator
+from typing import Iterator, Any
 
 try:
-    from whispercpp import Whisper
+    from whispercpp import Whisper  # type: ignore[import-untyped]
 except ImportError:
-    Whisper = None
+    Whisper = None  # type: ignore[assignment]
 
 from api.backends.protocol import TranscriptionBackend
 from api.whisper_transcribe import _model_cache, ModelCache
@@ -19,7 +19,7 @@ class WhisperCppBackend(TranscriptionBackend):
         self.supported_compute_types = ["float16", "int8"]
         self.supports_batched = False
         self._model_cache = model_cache or _model_cache
-        self._model = None
+        self._model: Any = None
 
     def load_model(self, model_size: str, compute_type: str = "int8", **kwargs) -> None:
         if Whisper is None:
@@ -49,11 +49,11 @@ class WhisperCppBackend(TranscriptionBackend):
             raise RuntimeError("Model not loaded. Call load_model() first.")
 
         result = self._model.transcribe(audio_path)
-        segments = iter(result.get("segments", []))
-        info = {
+        segments = iter(result.get("segments", []))  # type: ignore[union-attr]
+        info: dict = {
             "language": language or "auto",
             "language_probability": 1.0,
-            "duration": result.get("duration", 0),
+            "duration": result.get("duration", 0),  # type: ignore[union-attr]
         }
         return segments, info
 
