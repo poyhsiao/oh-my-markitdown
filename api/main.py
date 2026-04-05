@@ -537,8 +537,9 @@ async def transcribe_youtube(
     temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
     use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
     batch_size: int = Query(8, description="Batch size for batched inference"),
-    device: str = Query("auto", description="Compute device: auto, cpu, cuda, mps, rocm"),
-    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)")
+    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
+    vad_enabled: bool = Query(True, description="Enable VAD filtering")
 ):
     """
     Download YouTube video audio and transcribe using Whisper.
@@ -669,8 +670,13 @@ async def transcribe_audio_file(
     temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
     use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
     batch_size: int = Query(8, description="Batch size for batched inference"),
-    device: str = Query("auto", description="Compute device: auto, cpu, cuda, mps, rocm"),
-    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)")
+    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
+    vad_enabled: bool = Query(True, description="Enable VAD filtering"),
+    enable_chunking: bool = Query(False, description="Enable automatic chunking"),
+    chunk_duration: int = Query(60, description="Max duration per chunk (seconds)"),
+    chunk_overlap: int = Query(2, description="Overlap between chunks (seconds)"),
+    auto_chunk_threshold: int = Query(90, description="Auto-enable chunking above this duration (seconds)")
 ):
     """
     Upload audio file and transcribe using Whisper with chunking support.
@@ -706,11 +712,11 @@ async def transcribe_audio_file(
                 model_size=model_size,
                 device="auto",
                 cpu_threads=0,
-                vad_enabled=True,
-                enable_chunking=True,
-                chunk_duration=60,
-                chunk_overlap=2,
-                auto_enable_threshold=90
+                vad_enabled=vad_enabled,
+                enable_chunking=enable_chunking,
+                chunk_duration=chunk_duration,
+                chunk_overlap=chunk_overlap,
+                auto_enable_threshold=auto_chunk_threshold
             )
             
             # Format
@@ -760,8 +766,9 @@ async def transcribe_audio_file(
 @api_router.post("/convert/video")
 async def transcribe_video_file(
     file: UploadFile = File(..., description="Video file"),
-    language: str = Query("zh", description="Language code"),
+    language: str = Query("auto", description="Language code"),
     model_size: str = Query("auto", description="Model size"),
+    output_formats: str = Query("markdown", description="Output format: markdown, srt, vtt, json"),
     return_format: str = Query("markdown", description="Response format"),
     include_timestamps: bool = Query(False, description="Include timestamps"),
     quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
@@ -769,8 +776,13 @@ async def transcribe_video_file(
     temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
     use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
     batch_size: int = Query(8, description="Batch size for batched inference"),
-    device: str = Query("auto", description="Compute device: auto, cpu, cuda, mps, rocm"),
-    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)")
+    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
+    vad_enabled: bool = Query(True, description="Enable VAD filtering"),
+    enable_chunking: bool = Query(False, description="Enable automatic chunking"),
+    chunk_duration: int = Query(60, description="Max duration per chunk (seconds)"),
+    chunk_overlap: int = Query(2, description="Overlap between chunks (seconds)"),
+    auto_chunk_threshold: int = Query(90, description="Auto-enable chunking above this duration (seconds)")
 ):
     """
     Upload video file and transcribe using Whisper.
@@ -820,11 +832,11 @@ async def transcribe_video_file(
                 model_size=model_size,
                 device="auto",
                 cpu_threads=0,
-                vad_enabled=True,
-                enable_chunking=True,
-                chunk_duration=60,
-                chunk_overlap=2,
-                auto_enable_threshold=90
+                vad_enabled=vad_enabled,
+                enable_chunking=enable_chunking,
+                chunk_duration=chunk_duration,
+                chunk_overlap=chunk_overlap,
+                auto_enable_threshold=auto_chunk_threshold
             )
             
             metadata["source"] = "video"
@@ -1377,7 +1389,10 @@ async def convert_url(
     ocr_mode: str = Query("auto", description="OCR mode: auto (auto-detect), true (force OCR), false (disable OCR)", pattern="^(auto|true|false)$"),
     ocr_lang: str = Query(DEFAULT_OCR_LANG, description="OCR language"),
     include_timestamps: bool = Query(False, description="Include timestamps in Markdown"),
-    clean_html: bool = Query(True, description="Use Readability to clean HTML before conversion (default: true)")
+    clean_html: bool = Query(True, description="Use Readability to clean HTML before conversion (default: true)"),
+    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
+    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
+    vad_enabled: bool = Query(True, description="Enable VAD filtering")
 ):
     """
     Unified URL endpoint - auto-detects URL type and processes accordingly.

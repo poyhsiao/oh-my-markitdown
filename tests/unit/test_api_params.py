@@ -23,12 +23,12 @@ class TestAudioEndpointParameters:
         assert actual_default == "balanced", f"Expected 'balanced', got '{actual_default}'"
 
     def test_default_device_is_auto(self):
-        """Test device default is 'auto'."""
+        """Test device default is None (optional, uses env var)."""
         sig = inspect.signature(transcribe_audio_file)
         param = sig.parameters.get("device")
         assert param is not None, "device parameter not found"
         actual_default = param.default.default if hasattr(param.default, 'default') else param.default
-        assert actual_default == "auto", f"Expected 'auto', got '{actual_default}'"
+        assert actual_default is None, f"Expected None, got '{actual_default}'"
 
     def test_default_batch_size(self):
         """Test batch_size default matches DEFAULT_BATCH_SIZE constant."""
