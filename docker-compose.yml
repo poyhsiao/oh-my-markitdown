@@ -141,7 +141,7 @@ services:
       - gpu
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.cuda
     container_name: markitdown-api-gpu
     ports:
       - "${API_PORT:-51083}:8000"

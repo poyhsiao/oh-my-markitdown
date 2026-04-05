@@ -1,0 +1,89 @@
+# AMD ROCm Dockerfile for GPU-accelerated Whisper transcription
+# Phase 4: Whisper Performance Optimization
+FROM rocm/dev-ubuntu-22.04:6.1
+
+LABEL maintainer="Kimhsiao <white.shopping@gmail.com>"
+LABEL description="MarkItDown Docker with AMD ROCm GPU support - GPU-accelerated Faster-Whisper transcription"
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Python 3.12
+    python3.12 \
+    python3.12-venv \
+    python3-pip \
+    python3.12-dev \
+    # Audio processing
+    ffmpeg \
+    # OCR dependencies
+    tesseract-ocr \
+    tesseract-ocr-chi-tra \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-eng \
+    tesseract-ocr-jpn \
+    tesseract-ocr-kor \
+    tesseract-ocr-tha \
+    tesseract-ocr-vie \
+    # PDF processing
+    poppler-utils \
+    # Image metadata
+    libexif12 \
+    exiftool \
+    # CJK font support
+    fonts-noto-cjk \
+    # Build tools
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+RUN pip install --no-cache-dir uv
+
+# Create virtual environment
+RUN uv venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml uv.lock* ./
+
+# Install Python dependencies with ROCm support
+RUN uv pip install "faster-whisper>=1.2.0"
+RUN uv pip install torch --index-url https://download.pytorch.org/whl/rocm6.1
+
+# Copy application code
+COPY api/ /app/api/
+COPY cli.py /app/cli.py
+COPY scripts/ /app/scripts/
+COPY tests/ /app/tests/
+COPY pyproject.toml /app/
+
+# Install package in editable mode with rocm extras
+RUN uv pip install -e .
+
+# Pre-download Whisper model for ROCm (per spec Section 2.3)
+RUN uv run python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cuda', compute_type='float16')"
+
+# Create directory structure
+RUN mkdir -p /app/input /app/output /app/data
+
+# Set execute permissions
+RUN chmod +x /app/cli.py
+
+# Environment variables for GPU acceleration
+ENV WHISPER_DEVICE=rocm
+ENV WHISPER_COMPUTE_TYPE=float16
+ENV PYTHONUNBUFFERED=1
+
+# Expose API port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Start API service
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
