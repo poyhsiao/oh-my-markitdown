@@ -211,18 +211,31 @@ def transcribe_audio(
         vad_params: Custom VAD parameters
         word_timestamps: Enable word-level timestamps
         
-    Returns:
-        Tuple of (transcription_text, metadata)
+Returns:
+    Tuple of (transcription_text, metadata)
     """
+    overall_start = time.time()
+    model_load_start = time.time()
+
     # Use environment variables or defaults
-    effective_model = model_size or DEFAULT_MODEL
     effective_device = device or DEFAULT_DEVICE
     effective_compute_type = compute_type or DEFAULT_COMPUTE_TYPE
     effective_threads = cpu_threads or DEFAULT_CPU_THREADS
-    
+
+    # Handle auto model selection
+    audio_duration_seconds = None
+    if model_size == "auto" or model_size is None:
+        try:
+            audio_duration_seconds = get_audio_duration(audio_path)
+            effective_model = get_recommended_model(audio_duration_seconds)
+        except Exception:
+            effective_model = DEFAULT_MODEL
+    else:
+        effective_model = model_size
+
     # Handle "auto" for auto-detection (Whisper expects None for auto-detect)
     actual_language = None if language == "auto" else language
-    
+
     # VAD parameters
     if vad_enabled and vad_params is None:
         vad_params = {
@@ -230,11 +243,13 @@ def transcribe_audio(
             "threshold": DEFAULT_VAD_THRESHOLD,
             "speech_pad_ms": DEFAULT_VAD_SPEECH_PAD_MS
         }
-    
+
     # Load model with CPU threading support
     model = get_model(effective_model, effective_device, effective_compute_type, cpu_threads=effective_threads)
-    
+    model_load_time_ms = int((time.time() - model_load_start) * 1000)
+
     # Transcribe
+    transcription_start = time.time()
     segments, info = model.transcribe(
         audio_path,
         language=actual_language,
@@ -242,14 +257,21 @@ def transcribe_audio(
         vad_filter=vad_enabled,
         vad_parameters=vad_params if vad_enabled else None
     )
-    
+    transcription_time_ms = int((time.time() - transcription_start) * 1000)
+
     # Combine text
     transcript_lines = []
     for segment in segments:
         transcript_lines.append(segment.text)
-    
+
     transcript = " ".join(transcript_lines)
-    
+
+    # Calculate realtime factor
+    audio_duration = info.duration if info.duration else audio_duration_seconds
+    realtime_factor = None
+    if audio_duration and transcription_time_ms > 0:
+        realtime_factor = round(transcription_time_ms / (audio_duration * 1000), 2)
+
     # Metadata
     metadata = {
         "language": info.language,
@@ -261,6 +283,12 @@ def transcribe_audio(
         "device": effective_device,
         "compute_type": effective_compute_type,
         "vad_enabled": vad_enabled,
+        "backend": "faster-whisper",
+        "cpu_threads": effective_threads,
+        "model_load_time_ms": model_load_time_ms,
+        "transcription_time_ms": transcription_time_ms,
+        "realtime_factor": realtime_factor,
+        "audio_duration_seconds": audio_duration,
     }
     
     return transcript, metadata
@@ -410,18 +438,26 @@ def transcribe_youtube_video(
             # Subtitle extraction failed, fall back to Whisper
             print(f"[YouTube] Subtitle extraction failed, falling back to Whisper: {e}")
     
-    # Slow path: Download audio and use Whisper
+# Slow path: Download audio and use Whisper
     audio_quality = "64K" if fast_mode else "128K"
     audio_path, title = download_youtube_audio(url, output_dir, audio_quality=audio_quality)
-    
+
     try:
+        effective_model = model_size
+        if model_size == "auto" or model_size is None:
+            try:
+                audio_duration = get_audio_duration(audio_path)
+                effective_model = get_recommended_model(audio_duration)
+            except Exception:
+                effective_model = DEFAULT_MODEL
+
         # Transcribe with optional optimizations
         # Use more CPU threads in fast_mode for faster processing
         effective_threads = cpu_threads or (8 if fast_mode else None)
         transcript, metadata = transcribe_audio(
             audio_path,
             language=language,
-            model_size=model_size,
+            model_size=effective_model,
             device=device,
             compute_type=compute_type,
             cpu_threads=effective_threads,
@@ -840,20 +876,29 @@ def transcribe_audio_chunked(
         chunk_overlap: Overlap between chunks (seconds)
         auto_enable_threshold: Auto-enable chunking above this duration
     
-    Returns:
-        Tuple of (transcription_text, metadata)
+Returns:
+    Tuple of (transcription_text, metadata)
     """
     start_time = time.time()
-    
-    effective_model = model_size or DEFAULT_MODEL
+    model_load_start = time.time()
+
     effective_device = device or DEFAULT_DEVICE
     effective_compute_type = compute_type or DEFAULT_COMPUTE_TYPE
     effective_threads = cpu_threads or DEFAULT_CPU_THREADS
-    
+
     try:
         duration = get_audio_duration(audio_path)
     except Exception:
         duration = None
+
+    # Handle auto model selection
+    if model_size == "auto" or model_size is None:
+        if duration:
+            effective_model = get_recommended_model(duration)
+        else:
+            effective_model = DEFAULT_MODEL
+    else:
+        effective_model = model_size
     
     chunk_config = ChunkConfig(
         enabled=enable_chunking,
@@ -883,14 +928,15 @@ def transcribe_audio_chunked(
             word_timestamps=word_timestamps,
         )
     
-    # Load model for chunk transcription
+# Load model for chunk transcription
     model = get_model(
         model_size=effective_model,
         device=effective_device,
         compute_type=effective_compute_type,
         cpu_threads=effective_threads,
     )
-    
+    model_load_time_ms = int((time.time() - model_load_start) * 1000)
+
     # Split audio into chunks
     chunks = split_audio_into_chunks(
         file_path=audio_path,
@@ -933,19 +979,33 @@ def transcribe_audio_chunked(
         min_segment_gap=0.5,
     )
     
-    # Cleanup temporary chunks
+# Cleanup temporary chunks
     cleanup_chunks(chunks)
-    
+
     processing_time_ms = int((time.time() - start_time) * 1000)
-    
+    transcription_time_ms = processing_time_ms - model_load_time_ms
+
+    realtime_factor = None
+    if duration and transcription_time_ms > 0:
+        realtime_factor = round(transcription_time_ms / (duration * 1000), 2)
+
     metadata = {
         "processing_time_ms": processing_time_ms,
+        "transcription_time_ms": transcription_time_ms,
         "chunking_enabled": True,
         "total_chunks": len(chunks),
         "language": merged.get("language", "unknown"),
         "language_probability": merged.get("language_probability", 0.0),
+        "model": effective_model,
+        "device": effective_device,
+        "compute_type": effective_compute_type,
+        "backend": "faster-whisper",
+        "cpu_threads": effective_threads,
+        "model_load_time_ms": model_load_time_ms,
+        "realtime_factor": realtime_factor,
+        "audio_duration_seconds": duration,
     }
     if duration:
         metadata["original_duration"] = duration
-    
+
     return merged.get("text", ""), metadata

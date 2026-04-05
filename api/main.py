@@ -508,6 +508,7 @@ from .whisper_transcribe import (
     transcribe_with_formats,
     extract_audio_from_video,
     format_transcript_as_markdown,
+    get_recommended_model,
     SUPPORTED_LANGUAGES
 )
 from .response import success_response, transcribe_response, ErrorCodes
