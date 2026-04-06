@@ -1,11 +1,12 @@
 """
 Device detection and GPU configuration utilities.
 
-This module provides functions to detect and configure compute devices
-for Whisper transcription, supporting CPU, NVIDIA CUDA, and Apple Silicon MPS.
+Multi-layer detection: env override > nvidia-smi > torch > fallback CPU.
 """
 
 import os
+import shutil
+import subprocess
 import logging
 from typing import Literal, Dict, Any, Optional
 
@@ -20,39 +21,82 @@ MIN_CPU_THREADS = 1
 DEFAULT_CPU_THREADS = 4
 
 
+def _has_nvidia_gpu() -> bool:
+    """Check for NVIDIA GPU via nvidia-smi (works in Docker with NVIDIA runtime)."""
+    if shutil.which("nvidia-smi") is None:
+        return False
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.returncode == 0 and bool(result.stdout.strip())
+    except (subprocess.TimeoutExpired, Exception):
+        return False
+
+
+def _has_torch_cuda() -> bool:
+    """Check for CUDA via PyTorch."""
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+    except Exception:
+        return False
+
+
+def _has_torch_mps() -> bool:
+    """Check for Apple Silicon MPS via PyTorch."""
+    try:
+        import torch
+        if hasattr(torch.backends, 'mps'):
+            return torch.backends.mps.is_available() and torch.backends.mps.is_built()
+        return False
+    except ImportError:
+        return False
+    except Exception:
+        return False
+
+
 def detect_device() -> DeviceType:
     """
     Auto-detect optimal compute device.
     
-    Priority: CUDA > MPS > CPU
+    Detection order:
+    1. WHISPER_DEVICE env var (explicit override)
+    2. nvidia-smi (Docker NVIDIA runtime)
+    3. torch.cuda (PyTorch CUDA)
+    4. torch.mps (Apple Silicon)
+    5. CPU fallback
     
     Returns:
         DeviceType: The detected device ("cuda", "mps", or "cpu")
     """
-    # Try CUDA first
-    try:
-        import torch
-        if torch.cuda.is_available():
-            logger.info("CUDA device detected")
-            return "cuda"
-    except ImportError:
-        logger.debug("PyTorch not installed, CUDA unavailable")
-    except Exception as e:
-        logger.debug(f"CUDA detection failed: {e}")
+    # 1. Explicit env override
+    env_device = os.getenv("WHISPER_DEVICE", "").lower()
+    if env_device in ("cuda", "mps", "cpu"):
+        logger.info("Device overridden by WHISPER_DEVICE env: %s", env_device)
+        return env_device  # type: ignore[return-value]
+    if env_device == "auto":
+        pass  # Continue with auto-detection
     
-    # Try MPS (Apple Silicon)
-    try:
-        import torch
-        if hasattr(torch.backends, 'mps'):
-            if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-                logger.info("MPS (Apple Silicon) device detected")
-                return "mps"
-    except ImportError:
-        logger.debug("PyTorch not installed, MPS unavailable")
-    except Exception as e:
-        logger.debug(f"MPS detection failed: {e}")
+    # 2. nvidia-smi (fastest, no torch dependency)
+    if _has_nvidia_gpu():
+        logger.info("NVIDIA GPU detected via nvidia-smi")
+        return "cuda"
     
-    # Fallback to CPU
+    # 3. torch.cuda
+    if _has_torch_cuda():
+        logger.info("CUDA device detected via PyTorch")
+        return "cuda"
+    
+    # 4. torch.mps
+    if _has_torch_mps():
+        logger.info("MPS (Apple Silicon) device detected")
+        return "mps"
+    
+    # 5. Fallback
     logger.info("No GPU detected, using CPU")
     return "cpu"
 
@@ -75,43 +119,65 @@ def get_compute_type_for_device(device: str) -> str:
     return compute_type_map.get(device, "int8")
 
 
+def _is_running_in_docker() -> bool:
+    """Detect if running inside a Docker container."""
+    if os.path.exists("/.dockerenv"):
+        return True
+    try:
+        with open("/proc/1/cgroup", "r") as f:
+            return "docker" in f.read()
+    except (FileNotFoundError, PermissionError):
+        return False
+
+
 def get_device_info() -> Dict[str, Any]:
     """
     Get detailed information about available compute devices.
-    
-    Returns:
-        dict: Device information including:
-            - device: Detected device
-            - cuda_available: bool
-            - mps_available: bool
-            - cpu_count: int
-            - recommended_compute_type: str
-            - cuda_device_name: str (if CUDA available)
-            - cuda_device_count: int (if CUDA available)
-            - cuda_memory_gb: float (if CUDA available)
     """
+    in_docker = _is_running_in_docker()
     info: Dict[str, Any] = {
         "device": "cpu",
         "cuda_available": False,
         "mps_available": False,
         "cpu_count": os.cpu_count() or 4,
-        "recommended_compute_type": "int8"
+        "recommended_compute_type": "int8",
+        "in_docker": in_docker,
     }
     
-    # Check CUDA
-    try:
-        import torch
-        if torch.cuda.is_available():
-            info["cuda_available"] = True
-            info["cuda_device_name"] = torch.cuda.get_device_name(0)
-            info["cuda_device_count"] = torch.cuda.device_count()
-            info["cuda_memory_gb"] = round(
-                torch.cuda.get_device_properties(0).total_memory / (1024**3), 2
+    # Check CUDA via nvidia-smi (no torch needed)
+    if shutil.which("nvidia-smi") is not None:
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
+                capture_output=True, text=True, timeout=5
             )
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.debug(f"CUDA info retrieval failed: {e}")
+            if result.returncode == 0 and result.stdout.strip():
+                gpus = [line.strip() for line in result.stdout.strip().split('\n') if line.strip()]
+                info["cuda_available"] = True
+                info["cuda_device_count"] = len(gpus)
+                # Parse first GPU name and memory
+                parts = gpus[0].split(',')
+                info["cuda_device_name"] = parts[0].strip()
+                if len(parts) > 1:
+                    info["cuda_memory_gb"] = round(float(parts[1].strip().replace(' MiB', '')) / 1024, 2)
+        except (subprocess.TimeoutExpired, ValueError, IndexError, Exception) as e:
+            logger.debug("nvidia-smi info retrieval failed: %s", e)
+    
+    # Check CUDA via torch (if available)
+    if not info["cuda_available"]:
+        try:
+            import torch
+            if torch.cuda.is_available():
+                info["cuda_available"] = True
+                info["cuda_device_name"] = torch.cuda.get_device_name(0)
+                info["cuda_device_count"] = torch.cuda.device_count()
+                info["cuda_memory_gb"] = round(
+                    torch.cuda.get_device_properties(0).total_memory / (1024**3), 2
+                )
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug("CUDA info retrieval failed: %s", e)
     
     # Check MPS
     try:
@@ -123,11 +189,16 @@ def get_device_info() -> Dict[str, Any]:
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"MPS info retrieval failed: {e}")
+        logger.debug("MPS info retrieval failed: %s", e)
     
     # Set detected device
     info["device"] = detect_device()
     info["recommended_compute_type"] = get_compute_type_for_device(info["device"])
+    
+    # Docker limitation warnings
+    if in_docker:
+        info["docker_mps_available"] = False
+        info["docker_mps_note"] = "MPS is not available in Docker containers. Use native execution on macOS for Apple Silicon GPU acceleration."
     
     return info
 

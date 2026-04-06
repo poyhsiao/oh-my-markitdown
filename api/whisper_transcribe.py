@@ -199,34 +199,20 @@ def transcribe_audio(
     cpu_threads: Optional[int] = None,
     vad_enabled: bool = True,
     vad_params: Optional[dict] = None,
-    word_timestamps: bool = False
+    word_timestamps: bool = False,
+    beam_size: int = 3,
+    temperature: float = 0.0,
 ) -> Tuple[str, dict]:
     """
     Transcribe audio file with Whisper.
-    
-    Args:
-        audio_path: Path to audio file
-        language: Language code or "auto" for detection
-        model_size: Model size (None = use config default)
-        device: Compute device (None = use config default)
-        compute_type: Compute type (None = use config default)
-        cpu_threads: CPU threads (None = auto detect)
-        vad_enabled: Enable VAD filtering
-        vad_params: Custom VAD parameters
-        word_timestamps: Enable word-level timestamps
-        
-Returns:
-    Tuple of (transcription_text, metadata)
     """
     overall_start = time.time()
     model_load_start = time.time()
 
-    # Use environment variables or defaults
     effective_device = device or DEFAULT_DEVICE
     effective_compute_type = compute_type or DEFAULT_COMPUTE_TYPE
     effective_threads = cpu_threads or DEFAULT_CPU_THREADS
 
-    # Handle auto model selection
     audio_duration_seconds = None
     if model_size == "auto" or model_size is None:
         try:
@@ -237,10 +223,8 @@ Returns:
     else:
         effective_model = model_size
 
-    # Handle "auto" for auto-detection (Whisper expects None for auto-detect)
     actual_language = None if language == "auto" else language
 
-    # VAD parameters
     if vad_enabled and vad_params is None:
         vad_params = {
             "min_silence_duration_ms": DEFAULT_VAD_MIN_SILENCE_MS,
@@ -248,24 +232,27 @@ Returns:
             "speech_pad_ms": DEFAULT_VAD_SPEECH_PAD_MS
         }
 
-    # Load model with CPU threading support
     model = get_model(effective_model, effective_device, effective_compute_type, cpu_threads=effective_threads)
     model_load_time_ms = int((time.time() - model_load_start) * 1000)
 
-    # Transcribe
     transcription_start = time.time()
     segments, info = model.transcribe(
         audio_path,
         language=actual_language,
         word_timestamps=word_timestamps,
         vad_filter=vad_enabled,
-        vad_parameters=vad_params if vad_enabled else None
+        vad_parameters=vad_params if vad_enabled else None,
+        beam_size=beam_size,
+        temperature=temperature,
     )
     transcription_time_ms = int((time.time() - transcription_start) * 1000)
 
-    # Combine text
+    # Collect segments (generator consumed once)
+    segments_list = list(segments)
+
+    # Build transcript text
     transcript_lines = []
-    for segment in segments:
+    for segment in segments_list:
         transcript_lines.append(segment.text)
 
     transcript = " ".join(transcript_lines)
@@ -282,7 +269,7 @@ Returns:
         "language_probability": info.language_probability,
         "duration": info.duration,
         "duration_after_vad": info.duration_after_vad,
-        "segments_count": len(list(segments)) if segments else 0,
+        "segments_count": len(segments_list),
         "model": effective_model,
         "device": effective_device,
         "compute_type": effective_compute_type,
@@ -294,7 +281,14 @@ Returns:
         "realtime_factor": realtime_factor,
         "audio_duration_seconds": audio_duration,
     }
-    
+
+    # Include segments for timestamp formatting
+    if word_timestamps:
+        metadata["segments"] = [
+            {"start": s.start, "end": s.end, "text": s.text}
+            for s in segments_list
+        ]
+
     return transcript, metadata
 
 
@@ -386,7 +380,10 @@ def transcribe_youtube_video(
     vad_params: Optional[dict] = None,
     output_dir: str = "/tmp",
     prefer_subtitles: bool = True,
-    fast_mode: bool = False
+    fast_mode: bool = False,
+    beam_size: int = 3,
+    temperature: float = 0.0,
+    include_timestamps: bool = False,
 ) -> dict:
     """
     Download YouTube video and transcribe.
@@ -455,8 +452,7 @@ def transcribe_youtube_video(
             except Exception:
                 effective_model = DEFAULT_MODEL
 
-        # Transcribe with optional optimizations
-        # Use more CPU threads in fast_mode for faster processing
+        # Transcribe with optional timestamps
         effective_threads = cpu_threads or (8 if fast_mode else None)
         transcript, metadata = transcribe_audio(
             audio_path,
@@ -466,15 +462,19 @@ def transcribe_youtube_video(
             compute_type=compute_type,
             cpu_threads=effective_threads,
             vad_enabled=vad_enabled,
-            vad_params=vad_params
+            vad_params=vad_params,
+            word_timestamps=include_timestamps,
+            beam_size=beam_size,
+            temperature=temperature,
         )
-        
+
         processing_time_ms = int((time.time() - start_time) * 1000)
-        
+
         # Add source info to metadata
         metadata["source"] = "whisper"
         metadata["processing_time_ms"] = processing_time_ms
-        
+        metadata["include_timestamps"] = include_timestamps
+
         return {
             "success": True,
             "title": title,
@@ -500,24 +500,22 @@ def _get_video_title(url: str) -> str:
         return "Unknown"
 
 
+def _format_timestamp(seconds: float) -> str:
+    """Format seconds as [HH:MM:SS]."""
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    return f"[{h:02d}:{m:02d}:{s:02d}]"
+
+
 def format_transcript_as_markdown(
     title: str,
     transcript: str,
     metadata: dict,
-    include_metadata: bool = True
+    include_metadata: bool = True,
+    include_timestamps: bool = False,
 ) -> str:
-    """
-    Format transcript results as Markdown
-    
-    Args:
-        title: Video title
-        transcript: Transcript text
-        metadata: Metadata
-        include_metadata: Whether to include metadata
-    
-    Returns:
-        Markdown formatted string
-    """
+    """Format transcript results as Markdown."""
     md_lines = [f"# {title}", ""]
     
     if include_metadata:
@@ -564,9 +562,15 @@ def format_transcript_as_markdown(
     md_lines.extend([
         "## Transcript",
         "",
-        transcript
     ])
-    
+
+    if include_timestamps and metadata.get("segments"):
+        for seg in metadata["segments"]:
+            ts = _format_timestamp(seg["start"])
+            md_lines.append(f"{ts} {seg['text']}")
+    else:
+        md_lines.append(transcript)
+
     return "\n".join(md_lines)
 
 
@@ -932,6 +936,8 @@ Returns:
             vad_enabled=vad_enabled,
             vad_params=vad_params,
             word_timestamps=word_timestamps,
+            beam_size=beam_size,
+            temperature=temperature,
         )
     
 # Load model for chunk transcription

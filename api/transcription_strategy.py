@@ -28,7 +28,7 @@ class TranscriptionStrategy:
         cls,
         device: str,
         audio_duration: float,
-        quality_mode: str = "balanced",
+        quality_mode: str = "standard",
         beam_size: int | None = None,
         temperature: float | None = None,
         use_batched: bool | None = None,
@@ -36,11 +36,11 @@ class TranscriptionStrategy:
         cpu_threads: int | None = None,
     ) -> "TranscriptionStrategy":
         """Auto-configure optimal strategy based on device and audio."""
-        preset = QUALITY_PRESETS.get(quality_mode, QUALITY_PRESETS["balanced"])
+        preset = QUALITY_PRESETS.get(quality_mode, QUALITY_PRESETS["standard"])
 
         if device == "mps":
             backend = "whisper-cpp"
-            compute_type = "int8" if quality_mode == "speed" else "float16"
+            compute_type = "int8" if quality_mode == "fast" else "float16"
             resolved_use_batched = False
             max_workers = DEFAULT_MAX_WORKERS
         elif device in ("cuda", "rocm"):

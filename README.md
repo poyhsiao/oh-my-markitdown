@@ -483,7 +483,7 @@ For issues, please check:
 
 **Created by:** Kimhsiao  
 **Last Updated:** 2026-04-03  
-**Version:** 0.5.0  
-**API Port:** 51083 (adjustable via `API_PORT` environment variable)  
-**Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese  
-**New Features:** URL type detection (Content-Type, extension, magic bytes), OCR mode parameter (auto/true/false), JSON/Markdown/Text URL conversion, Image OCR support
+**Version:** 0.7.0
+**API Port:** 51083 (adjustable via `API_PORT` environment variable)
+**Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese
+**New Features:** Smart GPU/MPS auto-detection, simplified API parameters, native macOS Apple Silicon support, timestamped transcripts, and JSON-first YouTube API.

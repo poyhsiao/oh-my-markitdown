@@ -1,6 +1,6 @@
 [project]
 name = "oh-my-markitdown"
-version = "0.4.0"
+version = "0.7.0"
 description = "MarkItDown API - Convert files to Markdown with OCR and transcription"
 authors = [{ name = "Kimhsiao", email = "white.shopping@gmail.com" }]
 readme = "README.md"

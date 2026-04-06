@@ -527,77 +527,50 @@ async def transcribe_youtube(
     url: str = Query(..., description="YouTube video URL"),
     language: str = Query("zh", description="Language code (zh, en, ja, ko, etc.)"),
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
-    return_format: str = Query("markdown", description="Response format: markdown or json"),
-    include_timestamps: bool = Query(False, description="Include timestamps"),
-    include_metadata: bool = Query(True, description="Include metadata"),
-    prefer_subtitles: bool = Query(True, description="Prefer YouTube subtitles if available (faster)"),
-    fast_mode: bool = Query(False, description="Enable fast mode with optimizations (lower quality, faster processing)"),
-    quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
-    beam_size: int = Query(None, description="Beam search size (1=speed, 5=quality). Overrides quality_mode."),
-    temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
-    use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
-    batch_size: int = Query(8, description="Batch size for batched inference"),
-    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
-    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
-    vad_enabled: bool = Query(True, description="Enable VAD filtering")
+    return_format: str = Query("json", description="Response format: json or markdown"),
+    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best"),
+    include_timestamps: bool = Query(False, description="Include timestamps in transcript"),
+    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm")
 ):
     """
     Download YouTube video audio and transcribe using Whisper.
 
-    Uses hybrid strategy for speed optimization:
-    - **Fast path**: Uses YouTube subtitles if available (2-5 seconds)
-    - **Slow path**: Uses Whisper transcription (30-60 minutes for 1hr video)
-
     **Parameters:**
     - **url**: YouTube video URL
     - **language**: Language code (zh=Chinese, en=English, ja=Japanese, ko=Korean)
-    - **model_size**: Model size (auto, tiny, base, small, medium, large)
-    - **return_format**: Response format (markdown or json)
-    - **include_timestamps**: Include timestamps in transcript
-    - **include_metadata**: Include transcription metadata
-    - **prefer_subtitles**: Prefer YouTube subtitles if available (faster, default: true)
-    - **fast_mode**: Enable fast mode with optimizations for Whisper path
-    - **quality_mode**: Quality preset (speed, balanced, quality)
-    - **beam_size**: Beam search size (1=speed, 5=quality). Overrides quality_mode.
-    - **temperature**: Sampling temperature (0.0=greedy). Overrides quality_mode.
-    - **use_batched**: Use BatchedInferencePipeline (auto-detect if None)
-    - **batch_size**: Batch size for batched inference
-    - **device**: Compute device (auto, cpu, cuda, mps, rocm)
-    - **cpu_threads**: CPU thread count (auto-detect if None)
+    - **model_size**: Model size (auto=tiny/base/small based on duration)
+    - **return_format**: Response format (json=structured data, markdown=text)
+    - **quality_mode**: Quality preset (fast, standard, best)
+    - **include_timestamps**: Include [HH:MM:SS] timestamps in transcript
+    - **device**: Compute device (auto-detect if None)
 
-    **Response metadata fields (new in v0.3.0):**
-    - **source**: "youtube_subtitles" or "whisper" - indicates transcription source
-    - **is_auto_generated**: boolean - whether subtitles are auto-generated (for subtitle source)
-    - **processing_time_ms**: integer - processing time in milliseconds
-
-    **Fixed settings:**
-    - vad_enabled: true
+    **Auto-configured internally (when device=None):**
+    - Device: auto-detect (CUDA > MPS > CPU)
+    - VAD: always enabled
+    - Subtitle priority: auto-enabled for fast transcription
+    - Chunking: auto-enabled for long audio
     """
-    
+
     # Set request ID
     request_id = set_request_id()
-    
+
     # ===== CONCURRENCY CONTROL INTEGRATION =====
-    # Get concurrency manager
     manager = get_concurrency_manager()
-    
-    # Wait for processing slot with timeout
+
     acquired, queue_item = await manager.wait_for_slot(
         request_type="youtube",
         request_id=request_id,
-        timeout=None  # Use default queue_timeout from config
+        timeout=None
     )
-    
+
     if not acquired:
-        # Queue is full, return queue waiting response
         from .response import queue_waiting_response
         from fastapi.responses import JSONResponse
-        
-        # Calculate estimated wait time based on queue position
-        estimated_wait = 30  # Default 30 seconds
+
+        estimated_wait = 30
         if queue_item:
-            estimated_wait = queue_item.position * 10  # 10 seconds per position
-        
+            estimated_wait = queue_item.position * 10
+
         return JSONResponse(
             status_code=202,
             content=queue_waiting_response(
@@ -608,29 +581,47 @@ async def transcribe_youtube(
                 request_id=request_id
             )
         )
-    
-    # Slot acquired, proceed with processing
 
     try:
+        # Resolve quality preset to beam_size/temperature
+        from .constants import QUALITY_PRESETS
+        preset = QUALITY_PRESETS.get(quality_mode, QUALITY_PRESETS["standard"])
+
+        # Device: use provided value or auto-detect
+        if device and device != "auto":
+            effective_device = device
+        else:
+            from .device_utils import detect_device
+            effective_device = detect_device()
+
+        from .device_utils import get_compute_type_for_device, get_recommended_threads
+        effective_compute_type = get_compute_type_for_device(effective_device)
+        effective_threads = get_recommended_threads(0)
+
         result = transcribe_youtube_video(
             url=url,
             language=language,
             model_size=model_size,
-            device="auto",
-            cpu_threads=0,
+            device=effective_device,
+            compute_type=effective_compute_type,
+            cpu_threads=effective_threads,
             vad_enabled=True,
-            prefer_subtitles=prefer_subtitles,
-            fast_mode=fast_mode
+            prefer_subtitles=True,
+            fast_mode=(quality_mode == "fast"),
+            beam_size=preset["beam_size"],
+            temperature=preset["temperature"],
+            include_timestamps=include_timestamps,
         )
-        
+
         # Format as Markdown
         markdown_content = format_transcript_as_markdown(
             title=result["title"],
             transcript=result["transcript"],
             metadata=result["metadata"],
-            include_metadata=include_metadata
+            include_metadata=True,
+            include_timestamps=include_timestamps,
         )
-        
+
         if return_format == "markdown":
             return Response(
                 content=markdown_content.encode('utf-8'),
@@ -650,7 +641,7 @@ async def transcribe_youtube(
                 "metadata": result["metadata"],
                 "markdown": markdown_content
             }
-    
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -662,77 +653,70 @@ async def transcribe_youtube(
 async def transcribe_audio_file(
     file: UploadFile = File(..., description="Audio file"),
     language: str = Query("zh", description="Language code"),
-    model_size: str = Query("auto", description="Model size"),
-    return_format: str = Query("markdown", description="Response format"),
-    include_timestamps: bool = Query(False, description="Include timestamps"),
-    quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
-    beam_size: int = Query(None, description="Beam search size (1=speed, 5=quality). Overrides quality_mode."),
-    temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
-    use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
-    batch_size: int = Query(8, description="Batch size for batched inference"),
-    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
-    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
-    vad_enabled: bool = Query(True, description="Enable VAD filtering"),
-    enable_chunking: bool = Query(False, description="Enable automatic chunking"),
-    chunk_duration: int = Query(60, description="Max duration per chunk (seconds)"),
-    chunk_overlap: int = Query(2, description="Overlap between chunks (seconds)"),
-    auto_chunk_threshold: int = Query(90, description="Auto-enable chunking above this duration (seconds)")
+    model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
+    return_format: str = Query("markdown", description="Response format: markdown or json"),
+    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best")
 ):
     """
-    Upload audio file and transcribe using Whisper with chunking support.
+    Upload audio file and transcribe using Whisper.
 
+    **Parameters:**
     - **file**: Audio file (MP3, WAV, M4A, FLAC, etc.)
     - **language**: Language code
-    - **model_size**: Model size (auto, tiny, base, small, medium, large)
+    - **model_size**: Model size (auto=tiny/base/small based on duration)
     - **return_format**: Response format (markdown or json)
-    - **include_timestamps**: Include timestamps
-    - **quality_mode**: Quality preset (speed, balanced, quality)
-    - **beam_size**: Beam search size (1=speed, 5=quality). Overrides quality_mode.
-    - **temperature**: Sampling temperature (0.0=greedy). Overrides quality_mode.
-    - **use_batched**: Use BatchedInferencePipeline (auto-detect if None)
-    - **batch_size**: Batch size for batched inference
-    - **device**: Compute device (auto, cpu, cuda, mps, rocm)
-    - **cpu_threads**: CPU thread count (auto-detect if None)
+    - **quality_mode**: Quality preset (fast, standard, best)
 
-    Fixed STT settings: vad_enabled=true, enable_chunking=true,
-    chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
+    **Auto-configured internally:**
+    - Device: auto-detect (CUDA > MPS > CPU)
+    - VAD: always enabled
+    - Chunking: auto-enabled for files > 90s
     """
-    
+    from .constants import QUALITY_PRESETS
+    from .device_utils import detect_device, get_compute_type_for_device, get_recommended_threads
+
+    preset = QUALITY_PRESETS.get(quality_mode, QUALITY_PRESETS["standard"])
+    effective_device = detect_device()
+    effective_compute_type = get_compute_type_for_device(effective_device)
+    effective_threads = get_recommended_threads(0)
+
     try:
         suffix = Path(file.filename or "").suffix
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
-        
+
         try:
             transcript, metadata = transcribe_audio_chunked(
                 tmp_path,
                 language=language,
                 model_size=model_size,
-                device="auto",
-                cpu_threads=0,
-                vad_enabled=vad_enabled,
-                enable_chunking=enable_chunking,
-                chunk_duration=chunk_duration,
-                chunk_overlap=chunk_overlap,
-                auto_enable_threshold=auto_chunk_threshold
+                device=effective_device,
+                compute_type=effective_compute_type,
+                cpu_threads=effective_threads,
+                vad_enabled=True,
+                enable_chunking=True,
+                chunk_duration=DEFAULT_CHUNK_DURATION,
+                chunk_overlap=DEFAULT_CHUNK_OVERLAP,
+                auto_enable_threshold=DEFAULT_AUTO_CHUNK_THRESHOLD,
+                beam_size=preset["beam_size"],
+                temperature=preset["temperature"],
             )
-            
-            # Format
+
             markdown_content = format_transcript_as_markdown(
                 title=file.filename or "Audio Transcription",
                 transcript=transcript,
                 metadata=metadata
             )
-            
+
             from urllib.parse import quote
             safe_filename = file.filename or "unknown"
             try:
                 safe_filename.encode('ascii')
             except UnicodeEncodeError:
                 safe_filename = quote(safe_filename, safe='')
-            
+
             if return_format == "markdown":
                 return Response(
                     content=markdown_content.encode('utf-8'),
@@ -750,12 +734,11 @@ async def transcribe_audio_file(
                     "metadata": metadata,
                     "markdown": markdown_content
                 }
-        
+
         finally:
-            # Clean up temporary file
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
-    
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -767,94 +750,87 @@ async def transcribe_audio_file(
 async def transcribe_video_file(
     file: UploadFile = File(..., description="Video file"),
     language: str = Query("auto", description="Language code"),
-    model_size: str = Query("auto", description="Model size"),
-    output_formats: str = Query("markdown", description="Output format: markdown, srt, vtt, json"),
-    return_format: str = Query("markdown", description="Response format"),
-    include_timestamps: bool = Query(False, description="Include timestamps"),
-    quality_mode: str = Query("balanced", description="Quality preset: speed, balanced, quality"),
-    beam_size: int = Query(None, description="Beam search size (1=speed, 5=quality). Overrides quality_mode."),
-    temperature: float = Query(None, description="Sampling temperature (0.0=greedy). Overrides quality_mode."),
-    use_batched: bool = Query(None, description="Use BatchedInferencePipeline (auto-detect if None)"),
-    batch_size: int = Query(8, description="Batch size for batched inference"),
-    device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
-    cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
-    vad_enabled: bool = Query(True, description="Enable VAD filtering"),
-    enable_chunking: bool = Query(False, description="Enable automatic chunking"),
-    chunk_duration: int = Query(60, description="Max duration per chunk (seconds)"),
-    chunk_overlap: int = Query(2, description="Overlap between chunks (seconds)"),
-    auto_chunk_threshold: int = Query(90, description="Auto-enable chunking above this duration (seconds)")
+    model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
+    return_format: str = Query("markdown", description="Response format: markdown or json"),
+    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best")
 ):
     """
     Upload video file and transcribe using Whisper.
 
+    **Parameters:**
     - **file**: Video file (MP4, MKV, WebM, AVI, MOV, FLV, TS)
     - **language**: Language code
-    - **model_size**: Model size (auto, tiny, base, small, medium, large)
+    - **model_size**: Model size (auto=tiny/base/small based on duration)
     - **return_format**: Response format (markdown or json)
-    - **include_timestamps**: Include timestamps in Markdown
-    - **quality_mode**: Quality preset (speed, balanced, quality)
-    - **beam_size**: Beam search size (1=speed, 5=quality). Overrides quality_mode.
-    - **temperature**: Sampling temperature (0.0=greedy). Overrides quality_mode.
-    - **use_batched**: Use BatchedInferencePipeline (auto-detect if None)
-    - **batch_size**: Batch size for batched inference
-    - **device**: Compute device (auto, cpu, cuda, mps, rocm)
-    - **cpu_threads**: CPU thread count (auto-detect if None)
+    - **quality_mode**: Quality preset (fast, standard, best)
 
-    Fixed STT settings: vad_enabled=true, enable_chunking=true,
-    chunk_duration=60, chunk_overlap=2, auto_chunk_threshold=90
+    **Auto-configured internally:**
+    - Device: auto-detect (CUDA > MPS > CPU)
+    - VAD: always enabled
+    - Chunking: auto-enabled for files > 90s
     """
-    
+    from .constants import QUALITY_PRESETS
+    from .device_utils import detect_device, get_compute_type_for_device, get_recommended_threads
+
     allowed_video_extensions = {
         '.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.ts'
     }
-    
+
     file_ext = Path(file.filename or "").suffix.lower()
     if file_ext not in allowed_video_extensions:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported video type: {file_ext}. Supported types: {', '.join(allowed_video_extensions)}"
         )
-    
+
+    preset = QUALITY_PRESETS.get(quality_mode, QUALITY_PRESETS["standard"])
+    effective_device = detect_device()
+    effective_compute_type = get_compute_type_for_device(effective_device)
+    effective_threads = get_recommended_threads(0)
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
             content = await file.read()
             tmp.write(content)
             video_path = tmp.name
-        
+
         audio_path = None
-        
+
         try:
             audio_path = extract_audio_from_video(video_path)
-            
+
             transcript, metadata = transcribe_audio_chunked(
                 audio_path,
                 language=language,
                 model_size=model_size,
-                device="auto",
-                cpu_threads=0,
-                vad_enabled=vad_enabled,
-                enable_chunking=enable_chunking,
-                chunk_duration=chunk_duration,
-                chunk_overlap=chunk_overlap,
-                auto_enable_threshold=auto_chunk_threshold
+                device=effective_device,
+                compute_type=effective_compute_type,
+                cpu_threads=effective_threads,
+                vad_enabled=True,
+                enable_chunking=True,
+                chunk_duration=DEFAULT_CHUNK_DURATION,
+                chunk_overlap=DEFAULT_CHUNK_OVERLAP,
+                auto_enable_threshold=DEFAULT_AUTO_CHUNK_THRESHOLD,
+                beam_size=preset["beam_size"],
+                temperature=preset["temperature"],
             )
-            
+
             metadata["source"] = "video"
             metadata["original_filename"] = file.filename
-            
+
             markdown_content = format_transcript_as_markdown(
                 title=file.filename or "Video Transcription",
                 transcript=transcript,
                 metadata=metadata
             )
-            
+
             from urllib.parse import quote
             safe_filename = file.filename or "unknown"
             try:
                 safe_filename.encode('ascii')
             except UnicodeEncodeError:
                 safe_filename = quote(safe_filename, safe='')
-            
+
             return Response(
                 content=markdown_content.encode('utf-8'),
                 media_type="text/markdown; charset=utf-8",
@@ -865,103 +841,13 @@ async def transcribe_video_file(
                     "X-Model": model_size
                 }
             )
-        
+
         finally:
             if os.path.exists(video_path):
                 os.unlink(video_path)
             if audio_path and os.path.exists(audio_path):
                 os.unlink(audio_path)
-    
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Video transcription failed: {str(e)}"
-        )
-    
-    try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            video_path = tmp.name
-        
-        audio_path = None
-        
-        try:
-            audio_path = extract_audio_from_video(video_path)
-            
-            use_chunking = enable_chunking
-            audio_duration = None
-            
-            if not use_chunking and auto_chunk_threshold > 0:
-                try:
-                    audio_duration = get_audio_duration(audio_path)
-                    if audio_duration > auto_chunk_threshold:
-                        logger.info(f"Auto-enabling chunking for {audio_duration:.1f}s video...")
-                        use_chunking = True
-                except Exception as e:
-                    logger.warning(f"Failed to get audio duration: {e}")
-            
-            if use_chunking:
-                if output_formats != "markdown" and output_formats != "":
-                    logger.warning("Chunking enabled: only markdown output is supported. Ignoring output_formats parameter.")
-                
-                transcript, metadata = transcribe_audio_chunked(
-                    audio_path,
-                    language=language,
-                    model_size=model_size,
-                    device=device,
-                    cpu_threads=cpu_threads,
-                    vad_enabled=vad_enabled if vad_enabled is not None else True,
-                    enable_chunking=True,
-                    chunk_duration=chunk_duration,
-                    chunk_overlap=chunk_overlap,
-                    auto_enable_threshold=0
-                )
-                
-                metadata["chunking_enabled"] = True
-                metadata["chunk_duration"] = chunk_duration
-                metadata["source"] = "video"
-                metadata["original_filename"] = file.filename
-                
-                formats_dict = {"markdown": transcript}
-                
-                return transcribe_response(
-                    formats=formats_dict,
-                    default_format="markdown",
-                    source_type="video",
-                    title=file.filename or "Video Transcription",
-                    duration=metadata.get("duration"),
-                    language=language,
-                    model=model_size
-                )
-            else:
-                formats_dict, metadata = transcribe_with_formats(
-                    audio_path,
-                    language=language,
-                    model_size=model_size,
-                    device=device,
-                    cpu_threads=cpu_threads,
-                    vad_enabled=vad_enabled if vad_enabled is not None else True,
-                    output_formats=output_formats,
-                    include_timestamps=include_timestamps
-                )
-                
-                return transcribe_response(
-                    formats=formats_dict,
-                    default_format="markdown",
-                    source_type="video",
-                    title=file.filename or "Video Transcription",
-                    duration=metadata.get("duration"),
-                    language=language,
-                    model=model_size
-                )
-        
-        finally:
-            if os.path.exists(video_path):
-                os.unlink(video_path)
-            if audio_path and os.path.exists(audio_path):
-                os.unlink(audio_path)
-    
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -1433,15 +1319,20 @@ async def convert_url(
                 language=lang_param if lang_param else "zh",
                 model_size=model_size,
                 device="auto",
+                compute_type="auto",
                 cpu_threads=0,
-                vad_enabled=True
+                vad_enabled=True,
+                beam_size=3,
+                temperature=0.0,
+                include_timestamps=include_timestamps,
             )
             
             markdown_content = format_transcript_as_markdown(
                 title=result["title"],
                 transcript=result["transcript"],
                 metadata=result["metadata"],
-                include_metadata=True
+                include_metadata=True,
+                include_timestamps=include_timestamps,
             )
             
             return transcribe_response(
@@ -1539,12 +1430,15 @@ async def convert_url(
                     language=language if language != "auto" else "auto",
                     model_size=model_size,
                     device="auto",
+                    compute_type="auto",
                     cpu_threads=0,
                     vad_enabled=True,
                     enable_chunking=True,
                     chunk_duration=60,
                     chunk_overlap=2,
-                    auto_enable_threshold=90
+                    auto_enable_threshold=90,
+                    beam_size=3,
+                    temperature=0.0,
                 )
                 
                 markdown_content = format_transcript_as_markdown(
@@ -1595,12 +1489,15 @@ async def convert_url(
                     language=language if language != "auto" else "auto",
                     model_size=model_size,
                     device="auto",
+                    compute_type="auto",
                     cpu_threads=0,
                     vad_enabled=True,
                     enable_chunking=True,
                     chunk_duration=60,
                     chunk_overlap=2,
-                    auto_enable_threshold=90
+                    auto_enable_threshold=90,
+                    beam_size=3,
+                    temperature=0.0,
                 )
                 
                 markdown_content = format_transcript_as_markdown(

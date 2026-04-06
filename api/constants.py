@@ -118,10 +118,11 @@ MAX_TOTAL_DURATION = 7200 # Max total processing time (2 hours)
 MIN_CHUNK_DURATION = 10 # Minimum chunk duration (seconds)
 
 # ===== Whisper Quality Presets =====
+# Maps user-friendly quality_mode to beam_size/temperature
 QUALITY_PRESETS = {
-    "speed": {"beam_size": 1, "temperature": 0.0},
-    "balanced": {"beam_size": 3, "temperature": 0.0},
-    "quality": {"beam_size": 5, "temperature": 0.0},
+    "fast": {"beam_size": 1, "temperature": 0.0},
+    "standard": {"beam_size": 3, "temperature": 0.0},
+    "best": {"beam_size": 5, "temperature": 0.0},
 }
 
 # ===== Chunk Transcription Settings =====
