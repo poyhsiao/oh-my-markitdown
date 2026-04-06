@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-06
+
+### Added
+- **Smart Device Detection**: Multi-layer detection (`env` > `nvidia-smi` > `torch` > `CPU`) for optimal compute resource utilization without requiring PyTorch in base image.
+- **Apple Silicon MPS Support**: Native execution support for macOS Apple Silicon via `scripts/run.sh` (bypasses Docker Linux VM limitation).
+- **GPU Deployment Guide**: Added `docs/GPU_DEPLOYMENT.md` for NVIDIA CUDA server setup and verification.
+- **GPU Verification Tool**: Added `scripts/verify_gpu_detection.py` to validate hardware detection and compute type mapping.
+- **Device Info API**: Enhanced `/api/v1/device-info` endpoint to report Docker limitations and active hardware resources.
+- **Timestamp Support**: Added `include_timestamps` parameter to `/api/v1/convert/youtube` for `[HH:MM:SS]` formatted transcripts.
+
+### Changed
+- **API Simplification**: Reduced parameters for `/convert/youtube`, `/convert/audio`, and `/convert/video` from 17+ to 5 core parameters (`url/file`, `language`, `model_size`, `return_format`, `quality_mode`).
+- **Quality Mode Refactoring**: Simplified `quality_mode` values from `speed/balanced/quality` to `fast/standard/best`.
+- **Default Format**: Changed default `return_format` for YouTube transcription from `markdown` to `json`.
+- **Compute Type Auto-detection**: Fixed `compute_type` to automatically select `int8` for CPU and `float16` for CUDA/MPS instead of returning `"auto"`.
+- **Device Parameter**: Added explicit `device` parameter to `/api/v1/convert/youtube` for manual GPU override.
+
+### Fixed
+- Fixed `include_timestamps` logic in `transcribe_youtube_video` to correctly pass through to the transcription engine.
+- Fixed LSP type errors in `device_utils.py` and `whisper_transcribe.py`.
+
+---
+
 ## [0.6.0] - 2026-04-03
 
 ### Added
