@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-11
+
+### Added
+- **Unified `return_format` Parameter**: All convert endpoints (`/convert/file`, `/convert/url`, `/convert/youtube`, `/convert/audio`, `/convert/video`, `/convert/clean-html`) now support a unified `return_format` query/form parameter with three modes:
+  - `json`: Returns a structured JSON envelope (default for most endpoints)
+  - `markdown`: Returns raw Markdown as plain text (`text/plain`)
+  - `download`: Returns Markdown as a downloadable file attachment
+- **`build_convert_response()` Helper**: New shared response builder in `api/response.py` that standardises all convert endpoint responses, reducing boilerplate and ensuring a consistent JSON envelope.
+- **E2E Smoke Tests for `return_format`**: New end-to-end tests in `tests/e2e/` covering all six convert endpoints and all three output modes, verifying correct `Content-Type` headers and response shape.
+
+### Changed
+- **Version Bump**: `pyproject.toml`, FastAPI app metadata, and `/api/v1/config` endpoint all updated to `0.8.0`.
+- **`uv.lock`**: Lock file updated to reflect the new project version (`0.8.0`).
+
+### Fixed
+- Corrected stale version strings (`0.6.0` in FastAPI app initialisation, `0.4.0` in `/api/v1/config` endpoint) to align with the current release.
+
+---
+
 ## [0.7.0] - 2026-04-06
 
 ### Added
@@ -228,6 +247,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+[0.8.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/poyhsiao/oh-my-markitdown/compare/v0.3.0...v0.3.1

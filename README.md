@@ -482,8 +482,8 @@ For issues, please check:
 ---
 
 **Created by:** Kimhsiao  
-**Last Updated:** 2026-04-03  
-**Version:** 0.7.0
+**Last Updated:** 2026-04-11  
+**Version:** 0.8.0
 **API Port:** 51083 (adjustable via `API_PORT` environment variable)
 **Supported Languages:** Traditional Chinese, Simplified Chinese, English, Japanese, Korean, Thai, Vietnamese
-**New Features:** Smart GPU/MPS auto-detection, simplified API parameters, native macOS Apple Silicon support, timestamped transcripts, and JSON-first YouTube API.
+**New Features:** Unified `return_format` (json/markdown/download) across all convert endpoints, `build_convert_response()` helper, and E2E smoke tests for response format consistency.

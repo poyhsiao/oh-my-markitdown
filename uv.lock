@@ -1622,7 +1622,7 @@ wheels = [
 
 [[package]]
 name = "oh-my-markitdown"
-version = "0.4.0"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

@@ -113,7 +113,7 @@ def ocr_image_pdf(pdf_path: str, ocr_lang: str = "chi_tra+eng") -> str:
 app = FastAPI(
     title="MarkItDown API",
     description="Convert various file formats to Markdown via HTTP API with multi-language OCR support and YouTube/Audio transcription",
-    version="0.6.0",
+    version="0.8.0",
     debug=API_DEBUG,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -908,7 +908,7 @@ async def get_config():
     """Get current API configuration (sensitive info hidden)."""
     return {
         "api": {
-            "version": "0.4.0",
+            "version": "0.8.0",
             "debug": API_DEBUG,
             "max_upload_size": MAX_UPLOAD_SIZE,
             "max_upload_size_mb": MAX_UPLOAD_SIZE // 1024 // 1024,
