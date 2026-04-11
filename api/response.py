@@ -29,6 +29,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, asdict
 import uuid
 from contextvars import ContextVar
+from fastapi.responses import JSONResponse, Response as FastAPIResponse
 
 # Context variable to store request ID per request
 request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
@@ -208,6 +209,48 @@ def convert_file_response(
         },
         request_id=request_id
     )
+
+
+def build_convert_response(
+    content: str,
+    metadata: Dict[str, Any],
+    return_format: str = "json",
+    filename: str = "output.md",
+    request_id: Optional[str] = None,
+) -> FastAPIResponse:
+    """
+    Build a unified conversion response in the requested format.
+
+    Args:
+        content: Markdown content string
+        metadata: Endpoint-specific metadata dict
+        return_format: One of 'json' (default), 'markdown', 'download'
+        filename: Filename used for the Content-Disposition header (download only)
+        request_id: Optional request ID; auto-generated when omitted
+
+    Returns:
+        FastAPI Response: JSONResponse for 'json', plain Response for others
+    """
+    if return_format == "markdown":
+        return FastAPIResponse(
+            content=content.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+        )
+    elif return_format == "download":
+        return FastAPIResponse(
+            content=content.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            },
+        )
+    else:  # json (default)
+        return JSONResponse(
+            content=success_response(
+                data={"content": content, "metadata": metadata},
+                request_id=request_id,
+            )
+        )
 
 
 def transcribe_response(
