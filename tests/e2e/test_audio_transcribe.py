@@ -59,7 +59,8 @@ class TestAudioTranscribeE2E:
 
         assert response.status_code == 200
         data = response.json()
-        assert "text" in data or "markdown" in data
+        assert data["success"] is True
+        assert "content" in data["data"]
 
     @pytest.mark.asyncio
     async def test_backward_compat_without_new_params(self, api_client):
