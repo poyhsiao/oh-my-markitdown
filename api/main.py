@@ -54,12 +54,13 @@ from .config import validate_environment, ConfigurationError
 
 # Import unified response format and error codes
 from .response import (
-    success_response, 
-    error_response, 
-    ErrorCodes, 
+    success_response,
+    error_response,
+    ErrorCodes,
     set_request_id,
     transcribe_response,
-    convert_file_response
+    convert_file_response,
+    build_convert_response,
 )
 
 # Import concurrency manager
@@ -209,16 +210,30 @@ async def not_found_handler(request, exc):
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc):
-    """Handle validation errors with language-aware messages."""
+    """Handle validation errors with language-aware messages.
+
+    Returns 422 for query/path/header parameter validation errors (standard HTTP
+    semantics for unprocessable input), and 400 for body validation errors.
+    """
     accept_language = request.headers.get("Accept-Language", ERROR_LANG)
     message = get_error_message("validation_error", accept_language)
-    
+
+    errors = exc.errors()
+    # Return 422 if all errors are from non-body locations (query, path, header)
+    # so that FastAPI's standard Query pattern validation returns the expected 422.
+    non_body_locations = {"query", "path", "header", "cookie"}
+    all_non_body = errors and all(
+        (err.get("loc") or ("body",))[0] in non_body_locations
+        for err in errors
+    )
+    status_code = 422 if all_non_body else 400
+
     return Response(
         content=json.dumps({
             "detail": message,
-            "errors": exc.errors() if API_DEBUG else None
+            "errors": errors if API_DEBUG else None
         }),
-        status_code=400,
+        status_code=status_code,
         media_type="application/json"
     )
 
@@ -268,16 +283,16 @@ async def convert_file_endpoint(
     file: UploadFile = File(..., description="File to convert"),
     enable_ocr: bool = Query(False, description="Enable OCR, default false"),
     ocr_lang: str = Query("chi_tra+eng", description="OCR language code, default chi_tra+eng, use + to combine multiple languages"),
-    return_format: str = Query("markdown", description="Response format: markdown or json", pattern="^(markdown|json)$"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
     clean_html: str = Form("true", description="Use Readability to clean HTML before conversion (default: true)")
 ):
     """
     Upload a file and convert it to Markdown.
-    
+
     - **file**: File to convert (supports PDF, DOCX, PPTX, XLSX, images, audio, etc.)
     - **enable_ocr**: Enable OCR (default: false)
     - **ocr_lang**: OCR language (default: environment variable DEFAULT_OCR_LANG, supports chi_tra, chi_sim, eng, jpn, kor, tha, vie, combinable with +)
-    - **return_format**: Response format (markdown or json)
+    - **return_format**: Response format (json, markdown, or download)
     - **clean_html**: Use Readability to clean HTML before conversion (default: true)
     
     Returns:
@@ -434,35 +449,18 @@ async def convert_file_endpoint(
                     if API_DEBUG:
                         print(f"Image OCR failed: {ocr_error}")
             
-            if return_format == "markdown":
-                # Return Markdown text directly (ensure UTF-8 encoding)
-                # HTTP headers must be ASCII/latin-1, cannot contain Chinese
-                # Use URL encoding for filename
-                from urllib.parse import quote
-                safe_filename = quote(file.filename or "unknown", safe='')
-                
-                return Response(
-                    content=text_content.encode('utf-8'),
-                    media_type="text/markdown; charset=utf-8",
-                    headers={
-                        "X-Original-Filename": safe_filename,
-                        "X-Conversion-Time": datetime.now().isoformat(),
-                        "X-OCR-Language": ocr_lang if enable_plugins else "N/A",
-                        # Use ASCII safe characters for filename to avoid encoding issues
-                        "Content-Disposition": f'attachment; filename="converted.md"'
-                    }
-                )
-            else:
-                # Return JSON format (using unified response format)
-                return convert_file_response(
-                    content=text_content,
-                    format="markdown",
-                    filename=file.filename or "unknown",
-                    file_size=len(file_content),
-                    conversion_time=datetime.now().isoformat(),
-                    ocr_language=ocr_lang if enable_plugins else None,
-                    request_id=request_id
-                )
+            return build_convert_response(
+                content=text_content,
+                metadata={
+                    "source": file.filename or "unknown",
+                    "format": "markdown",
+                    "file_size": len(file_content),
+                    "ocr_language": ocr_lang if enable_plugins else None,
+                },
+                return_format=return_format,
+                filename=f"{Path(file.filename or 'output').stem}.md",
+                request_id=request_id,
+            )
         
         finally:
             # Clean up temporary file
@@ -492,7 +490,7 @@ async def convert_file_legacy(
     file: UploadFile = File(..., description="File to convert"),
     enable_ocr: bool = Query(False, description="Enable OCR, default false"),
     ocr_lang: str = Query("chi_tra+eng", description="OCR language code, default chi_tra+eng, use + to combine multiple languages"),
-    return_format: str = Query("markdown", description="Response format: markdown or json", pattern="^(markdown|json)$"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
     clean_html: str = Form("true", description="Use Readability to clean HTML before conversion (default: true)")
 ):
     """Legacy endpoint for backward compatibility. Redirects to /convert/file."""
@@ -523,11 +521,11 @@ from .constants import (
 )
 
 @api_router.post("/convert/youtube")
-async def transcribe_youtube(
+async def convert_youtube(
     url: str = Query(..., description="YouTube video URL"),
     language: str = Query("zh", description="Language code (zh, en, ja, ko, etc.)"),
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
-    return_format: str = Query("json", description="Response format: json or markdown"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
     quality_mode: str = Query("standard", description="Quality preset: fast, standard, best"),
     include_timestamps: bool = Query(False, description="Include timestamps in transcript"),
     device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm")
@@ -622,25 +620,18 @@ async def transcribe_youtube(
             include_timestamps=include_timestamps,
         )
 
-        if return_format == "markdown":
-            return Response(
-                content=markdown_content.encode('utf-8'),
-                media_type="text/markdown; charset=utf-8",
-                headers={
-                    "X-Source-URL": url,
-                    "X-Conversion-Time": datetime.now().isoformat(),
-                    "X-Transcript-Length": str(len(result["transcript"]))
-                }
-            )
-        else:
-            return {
-                "success": True,
-                "url": url,
+        return build_convert_response(
+            content=markdown_content,
+            metadata={
+                "source": url,
                 "title": result["title"],
                 "transcript": result["transcript"],
-                "metadata": result["metadata"],
-                "markdown": markdown_content
-            }
+                **result["metadata"],
+            },
+            return_format=return_format,
+            filename=f"{result['title'][:50]}.md" if result.get("title") else "transcript.md",
+            request_id=request_id,
+        )
 
     except Exception as e:
         raise HTTPException(
@@ -654,7 +645,7 @@ async def transcribe_audio_file(
     file: UploadFile = File(..., description="Audio file"),
     language: str = Query("zh", description="Language code"),
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
-    return_format: str = Query("markdown", description="Response format: markdown or json"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
     quality_mode: str = Query("standard", description="Quality preset: fast, standard, best")
 ):
     """
@@ -717,23 +708,17 @@ async def transcribe_audio_file(
             except UnicodeEncodeError:
                 safe_filename = quote(safe_filename, safe='')
 
-            if return_format == "markdown":
-                return Response(
-                    content=markdown_content.encode('utf-8'),
-                    media_type="text/markdown; charset=utf-8",
-                    headers={
-                        "X-Filename": safe_filename,
-                        "X-Conversion-Time": datetime.now().isoformat()
-                    }
-                )
-            else:
-                return {
-                    "success": True,
-                    "filename": file.filename,
+            return build_convert_response(
+                content=markdown_content,
+                metadata={
+                    "source": file.filename or "unknown",
                     "transcript": transcript,
-                    "metadata": metadata,
-                    "markdown": markdown_content
-                }
+                    **metadata,
+                },
+                return_format=return_format,
+                filename=f"{Path(file.filename or 'audio').stem}.md",
+                request_id=None,
+            )
 
         finally:
             if os.path.exists(tmp_path):
@@ -751,7 +736,7 @@ async def transcribe_video_file(
     file: UploadFile = File(..., description="Video file"),
     language: str = Query("auto", description="Language code"),
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
-    return_format: str = Query("markdown", description="Response format: markdown or json"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
     quality_mode: str = Query("standard", description="Quality preset: fast, standard, best")
 ):
     """
@@ -831,15 +816,17 @@ async def transcribe_video_file(
             except UnicodeEncodeError:
                 safe_filename = quote(safe_filename, safe='')
 
-            return Response(
-                content=markdown_content.encode('utf-8'),
-                media_type="text/markdown; charset=utf-8",
-                headers={
-                    "X-Filename": safe_filename,
-                    "X-Source": "video",
-                    "X-Language": language,
-                    "X-Model": model_size
-                }
+            return build_convert_response(
+                content=markdown_content,
+                metadata={
+                    "source": "video",
+                    "original_filename": file.filename,
+                    "transcript": transcript,
+                    **metadata,
+                },
+                return_format=return_format,
+                filename=f"{Path(file.filename or 'video').stem}.md",
+                request_id=None,
             )
 
         finally:
@@ -1278,7 +1265,8 @@ async def convert_url(
     clean_html: bool = Query(True, description="Use Readability to clean HTML before conversion (default: true)"),
     device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm"),
     cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
-    vad_enabled: bool = Query(True, description="Enable VAD filtering")
+    vad_enabled: bool = Query(True, description="Enable VAD filtering"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
 ):
     """
     Unified URL endpoint - auto-detects URL type and processes accordingly.
@@ -1335,15 +1323,19 @@ async def convert_url(
                 include_timestamps=include_timestamps,
             )
             
-            return transcribe_response(
-                formats={"markdown": markdown_content},
-                default_format="markdown",
-                source_type="youtube",
-                title=result["title"],
-                duration=result["metadata"].get("duration"),
-                language=language if language != "auto" else result["metadata"].get("language"),
-                model=model_size,
-                request_id=request_id
+            return build_convert_response(
+                content=markdown_content,
+                metadata={
+                    "source": url,
+                    "source_type": "youtube",
+                    "title": result["title"],
+                    "duration": result["metadata"].get("duration"),
+                    "language": language if language != "auto" else result["metadata"].get("language"),
+                    "model": model_size,
+                },
+                return_format=return_format,
+                filename=f"{result['title'][:50]}.md" if result.get("title") else "transcript.md",
+                request_id=request_id,
             )
             
         elif url_type == "document":
@@ -1393,14 +1385,18 @@ async def convert_url(
                         if API_DEBUG:
                             print(f"OCR failed: {ocr_error}")
                 
-                return convert_file_response(
+                return build_convert_response(
                     content=text_content,
-                    format="markdown",
-                    filename=filename,
-                    file_size=os.path.getsize(tmp_path),
-                    conversion_time=datetime.now().isoformat(),
-                    ocr_language=ocr_lang,
-                    request_id=request_id
+                    metadata={
+                        "source": url,
+                        "source_type": "document",
+                        "filename": filename,
+                        "file_size": os.path.getsize(tmp_path),
+                        "ocr_language": ocr_lang,
+                    },
+                    return_format=return_format,
+                    filename=f"{Path(filename).stem}.md",
+                    request_id=request_id,
                 )
             
             finally:
@@ -1448,15 +1444,19 @@ async def convert_url(
                     include_metadata=True
                 )
                 
-                return transcribe_response(
-                    formats={"markdown": markdown_content},
-                    default_format="markdown",
-                    source_type="audio",
-                    title=filename,
-                    duration=metadata.get("duration"),
-                    language=language if language != "auto" else metadata.get("language"),
-                    model=model_size,
-                    request_id=request_id
+                return build_convert_response(
+                    content=markdown_content,
+                    metadata={
+                        "source": url,
+                        "source_type": "audio",
+                        "title": filename,
+                        "duration": metadata.get("duration"),
+                        "language": language if language != "auto" else metadata.get("language"),
+                        "model": model_size,
+                    },
+                    return_format=return_format,
+                    filename=f"{Path(filename).stem}.md",
+                    request_id=request_id,
                 )
             
             finally:
@@ -1507,15 +1507,19 @@ async def convert_url(
                     include_metadata=True
                 )
                 
-                return transcribe_response(
-                    formats={"markdown": markdown_content},
-                    default_format="markdown",
-                    source_type="video",
-                    title=filename,
-                    duration=metadata.get("duration"),
-                    language=language if language != "auto" else metadata.get("language"),
-                    model=model_size,
-                    request_id=request_id
+                return build_convert_response(
+                    content=markdown_content,
+                    metadata={
+                        "source": url,
+                        "source_type": "video",
+                        "title": filename,
+                        "duration": metadata.get("duration"),
+                        "language": language if language != "auto" else metadata.get("language"),
+                        "model": model_size,
+                    },
+                    return_format=return_format,
+                    filename=f"{Path(filename).stem}.md",
+                    request_id=request_id,
                 )
             
             finally:
@@ -1564,14 +1568,18 @@ async def convert_url(
                         if API_DEBUG:
                             print(f"Image OCR failed: {ocr_error}")
                 
-                return convert_file_response(
+                return build_convert_response(
                     content=text_content,
-                    format="markdown",
-                    filename=filename,
-                    file_size=os.path.getsize(image_path),
-                    conversion_time=datetime.now().isoformat(),
-                    ocr_language=ocr_lang if enable_plugins else None,
-                    request_id=request_id
+                    metadata={
+                        "source": url,
+                        "source_type": "image",
+                        "filename": filename,
+                        "file_size": os.path.getsize(image_path),
+                        "ocr_language": ocr_lang if enable_plugins else None,
+                    },
+                    return_format=return_format,
+                    filename=f"{Path(filename).stem}.md",
+                    request_id=request_id,
                 )
             
             finally:
@@ -1587,42 +1595,51 @@ async def convert_url(
             except Exception:
                 json_text = response.text
             
-            return convert_file_response(
+            return build_convert_response(
                 content=json_text,
-                format="markdown",
-                filename=os.path.basename(urlparse(url).path) or "data.json",
-                file_size=len(response.content),
-                conversion_time=datetime.now().isoformat(),
-                ocr_language=None,
-                request_id=request_id
+                metadata={
+                    "source": url,
+                    "source_type": "json",
+                    "filename": os.path.basename(urlparse(url).path) or "data.json",
+                    "file_size": len(response.content),
+                },
+                return_format=return_format,
+                filename=f"{Path(os.path.basename(urlparse(url).path) or 'data').stem}.md",
+                request_id=request_id,
             )
         
         elif url_type == "markdown":
             response = requests.get(url, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
-            return convert_file_response(
+            return build_convert_response(
                 content=response.text,
-                format="markdown",
+                metadata={
+                    "source": url,
+                    "source_type": "markdown",
+                    "filename": os.path.basename(urlparse(url).path) or "document.md",
+                    "file_size": len(response.content),
+                },
+                return_format=return_format,
                 filename=os.path.basename(urlparse(url).path) or "document.md",
-                file_size=len(response.content),
-                conversion_time=datetime.now().isoformat(),
-                ocr_language=None,
-                request_id=request_id
+                request_id=request_id,
             )
         
         elif url_type == "text":
             response = requests.get(url, headers=DEFAULT_REQUEST_HEADERS)
             response.raise_for_status()
             
-            return convert_file_response(
+            return build_convert_response(
                 content=response.text,
-                format="markdown",
-                filename=os.path.basename(urlparse(url).path) or "document.txt",
-                file_size=len(response.content),
-                conversion_time=datetime.now().isoformat(),
-                ocr_language=None,
-                request_id=request_id
+                metadata={
+                    "source": url,
+                    "source_type": "text",
+                    "filename": os.path.basename(urlparse(url).path) or "document.txt",
+                    "file_size": len(response.content),
+                },
+                return_format=return_format,
+                filename=f"{Path(os.path.basename(urlparse(url).path) or 'document').stem}.md",
+                request_id=request_id,
             )
         
         elif url_type == "webpage":
@@ -1647,14 +1664,17 @@ async def convert_url(
                     if os.path.exists(html_path):
                         os.unlink(html_path)
             
-            return convert_file_response(
+            return build_convert_response(
                 content=text_content,
-                format="markdown",
-                filename=os.path.basename(urlparse(url).path) or "webpage",
-                file_size=len(response.content),
-                conversion_time=datetime.now().isoformat(),
-                ocr_language=None,
-                request_id=request_id
+                metadata={
+                    "source": url,
+                    "source_type": "webpage",
+                    "filename": os.path.basename(urlparse(url).path) or "webpage",
+                    "file_size": len(response.content),
+                },
+                return_format=return_format,
+                filename=f"{Path(os.path.basename(urlparse(url).path) or 'webpage').stem}.md",
+                request_id=request_id,
             )
         
         else:
@@ -1692,6 +1712,7 @@ async def convert_url(
 async def convert_clean_html(
     url: Optional[str] = Query(None, description="URL to fetch and clean"),
     file: Optional[UploadFile] = File(None, description="HTML file to clean"),
+    return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
 ):
     request_id = set_request_id()
 
@@ -1749,13 +1770,15 @@ async def convert_clean_html(
 
         markdown_content = _html_to_markdown(html_content)
 
-        return convert_file_response(
+        return build_convert_response(
             content=markdown_content,
-            format="markdown",
-            filename=filename,
-            file_size=len(html_content),
-            conversion_time=datetime.now().isoformat(),
-            ocr_language=None,
+            metadata={
+                "source": url or (file.filename if file else "unknown"),
+                "format": "markdown",
+                "file_size": len(html_content),
+            },
+            return_format=return_format,
+            filename=f"{Path(filename).stem}.md",
             request_id=request_id,
         )
 

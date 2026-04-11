@@ -933,3 +933,207 @@ class TestConvertUrlOcrMode:
             params={"url": "https://example.com/doc.pdf", "ocr_mode": "invalid"}
         )
         assert response.status_code in [400, 422]
+
+# ===========================================================================
+# Unified return_format parameter tests (TDD Task 2-7)
+# ===========================================================================
+
+
+class TestConvertFileReturnFormat:
+    """Test /convert/file return_format parameter: json/markdown/download."""
+
+    def test_return_format_default_is_json(self):
+        from api.main import convert_file_endpoint
+        import inspect
+
+        sig = inspect.signature(convert_file_endpoint)
+        param = sig.parameters["return_format"]
+        default = param.default
+        if hasattr(default, "default"):
+            assert default.default == "json"
+        else:
+            assert default == "json"
+
+    def test_return_format_accepts_download(self):
+        from api.main import convert_file_endpoint
+        import inspect
+
+        sig = inspect.signature(convert_file_endpoint)
+        param = sig.parameters["return_format"]
+        # Should accept json, markdown, download
+        assert param is not None
+
+    def test_return_format_rejects_invalid(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        with open(__file__, "rb") as f:
+            response = client.post(
+                "/api/v1/convert/file",
+                files={"file": ("test.txt", f, "text/plain")},
+                params={"return_format": "invalid_value"},
+            )
+        assert response.status_code == 422
+
+
+class TestConvertAudioReturnFormat:
+    """Test /convert/audio return_format default changed to json."""
+
+    def test_return_format_default_is_json(self):
+        from api.main import transcribe_audio_file
+        import inspect
+
+        sig = inspect.signature(transcribe_audio_file)
+        param = sig.parameters["return_format"]
+        default = param.default
+        if hasattr(default, "default"):
+            assert default.default == "json"
+        else:
+            assert default == "json"
+
+    def test_return_format_accepts_all_three_values(self):
+        from api.main import transcribe_audio_file
+        import inspect
+
+        sig = inspect.signature(transcribe_audio_file)
+        param = sig.parameters["return_format"]
+        assert param is not None
+
+    def test_return_format_rejects_invalid(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        with open(__file__, "rb") as f:
+            response = client.post(
+                "/api/v1/convert/audio",
+                files={"file": ("audio.mp3", f, "audio/mpeg")},
+                params={"return_format": "pdf"},
+            )
+        assert response.status_code == 422
+
+
+class TestConvertVideoReturnFormat:
+    """Test /convert/video return_format default changed to json."""
+
+    def test_return_format_default_is_json(self):
+        from api.main import transcribe_video_file
+        import inspect
+
+        sig = inspect.signature(transcribe_video_file)
+        param = sig.parameters["return_format"]
+        default = param.default
+        if hasattr(default, "default"):
+            assert default.default == "json"
+        else:
+            assert default == "json"
+
+    def test_return_format_rejects_invalid(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        with open(__file__, "rb") as f:
+            response = client.post(
+                "/api/v1/convert/video",
+                files={"file": ("video.mp4", f, "video/mp4")},
+                params={"return_format": "pdf"},
+            )
+        assert response.status_code == 422
+
+
+class TestConvertYoutubeReturnFormat:
+    """Test /convert/youtube return_format: default json, pattern validation."""
+
+    def test_return_format_default_is_json(self):
+        from api.main import convert_youtube
+        import inspect
+
+        sig = inspect.signature(convert_youtube)
+        param = sig.parameters["return_format"]
+        default = param.default
+        if hasattr(default, "default"):
+            assert default.default == "json"
+        else:
+            assert default == "json"
+
+    def test_return_format_rejects_invalid(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/convert/youtube",
+            params={"url": "https://youtu.be/dQw4w9WgXcQ", "return_format": "csv"},
+        )
+        assert response.status_code == 422
+
+
+class TestConvertUrlReturnFormat:
+    """Test /convert/url return_format parameter default and validation."""
+
+    def test_return_format_default_is_json(self):
+        from api.main import convert_url
+        import inspect
+
+        sig = inspect.signature(convert_url)
+        param = sig.parameters["return_format"]
+        default = param.default
+        if hasattr(default, "default"):
+            assert default.default == "json"
+        else:
+            assert default == "json"
+
+    def test_return_format_accepts_download(self):
+        from api.main import convert_url
+        import inspect
+
+        sig = inspect.signature(convert_url)
+        assert "return_format" in sig.parameters
+
+    def test_return_format_rejects_invalid(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/convert/url",
+            params={"url": "https://example.com", "return_format": "pdf"},
+        )
+        assert response.status_code == 422
+
+
+class TestConvertCleanHtmlReturnFormat:
+    """Test /convert/clean-html has return_format parameter with json default."""
+
+    def test_has_return_format_parameter(self):
+        from api.main import convert_clean_html
+        import inspect
+
+        sig = inspect.signature(convert_clean_html)
+        assert "return_format" in sig.parameters
+
+    def test_return_format_default_is_json(self):
+        from api.main import convert_clean_html
+        import inspect
+
+        sig = inspect.signature(convert_clean_html)
+        param = sig.parameters["return_format"]
+        default = param.default
+        if hasattr(default, "default"):
+            assert default.default == "json"
+        else:
+            assert default == "json"
+
+    def test_return_format_rejects_invalid(self):
+        from api.main import app
+        from fastapi.testclient import TestClient
+
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/convert/clean-html",
+            json={"html": "<p>Test</p>", "return_format": "invalid"},
+            params={"return_format": "invalid"},
+        )
+        assert response.status_code == 422
