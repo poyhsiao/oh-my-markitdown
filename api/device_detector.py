@@ -48,7 +48,11 @@ class DeviceDetector:
 
     @staticmethod
     def get_backend_class(device: str) -> type:
-        """Get backend class for a device. mps->WhisperCppBackend, else->FasterWhisperBackend."""
+        """Get backend class for a device. nemotron->NemotronAsrBackend, mps->WhisperCppBackend, else->FasterWhisperBackend."""
+        if device == "nemotron":
+            from api.backends.nemotron_backend import NemotronAsrBackend
+
+            return NemotronAsrBackend
         if device == "mps":
             from api.backends.whisper_cpp_backend import WhisperCppBackend
 

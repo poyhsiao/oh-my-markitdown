@@ -152,7 +152,8 @@ def cmd_youtube(args):
         'model_size': args.model,
         'return_format': args.format,
         'include_timestamps': args.include_timestamps,
-        'include_metadata': True
+        'include_metadata': True,
+        'backend': args.backend,
     }
     
     if args.verbose:
@@ -252,7 +253,8 @@ def cmd_video(args):
                 'language': args.language,
                 'model_size': args.model,
                 'return_format': args.format,
-                'include_timestamps': args.include_timestamps
+                'include_timestamps': args.include_timestamps,
+                'backend': args.backend,
             }
             
             response = requests.post(api_url, files=files, params=params, timeout=600)
@@ -316,7 +318,8 @@ def cmd_audio(args):
                 'language': args.language,
                 'model_size': args.model,
                 'return_format': args.format,
-                'include_timestamps': args.include_timestamps
+                'include_timestamps': args.include_timestamps,
+                'backend': args.backend,
             }
             
             response = requests.post(api_url, files=files, params=params, timeout=600)
@@ -697,9 +700,10 @@ def main():
     youtube_parser.add_argument('--include-timestamps', action='store_true', help='包含時間戳')
     youtube_parser.add_argument('--output', '-o', help='輸出文件路徑')
     youtube_parser.add_argument('--format', choices=['markdown', 'json'], default='markdown', help='輸出格式')
+    youtube_parser.add_argument('--backend', choices=['whisper', 'nemotron'], default='whisper', help='轉譯後端（預設：whisper）')
     youtube_parser.add_argument('--verbose', '-v', action='store_true', help='詳細輸出')
     youtube_parser.set_defaults(func=cmd_youtube)
-    
+
     # video 命令
     video_parser = subparsers.add_parser('video', help='視頻文件轉錄')
     video_parser.add_argument('file', help='視頻文件路徑')
@@ -709,6 +713,7 @@ def main():
     video_parser.add_argument('--include-timestamps', action='store_true', help='包含時間戳')
     video_parser.add_argument('--output', '-o', help='輸出文件路徑')
     video_parser.add_argument('--format', choices=['markdown', 'json'], default='markdown', help='輸出格式')
+    video_parser.add_argument('--backend', choices=['whisper', 'nemotron'], default='whisper', help='轉譯後端（預設：whisper）')
     video_parser.add_argument('--verbose', '-v', action='store_true', help='詳細輸出')
     video_parser.set_defaults(func=cmd_video)
     
@@ -721,6 +726,7 @@ def main():
     audio_parser.add_argument('--include-timestamps', action='store_true', help='包含時間戳')
     audio_parser.add_argument('--output', '-o', help='輸出文件路徑')
     audio_parser.add_argument('--format', choices=['markdown', 'json'], default='markdown', help='輸出格式')
+    audio_parser.add_argument('--backend', choices=['whisper', 'nemotron'], default='whisper', help='轉譯後端（預設：whisper）')
     audio_parser.add_argument('--verbose', '-v', action='store_true', help='詳細輸出')
     audio_parser.set_defaults(func=cmd_audio)
     
@@ -733,6 +739,7 @@ def main():
     url_parser.add_argument('--formats', '-f', default='markdown', help='輸出格式（逗號分隔）')
     url_parser.add_argument('--include-timestamps', action='store_true', help='包含時間戳')
     url_parser.add_argument('--output', '-o', help='輸出文件路徑')
+    url_parser.add_argument('--backend', choices=['whisper', 'nemotron'], default='whisper', help='轉譯後端（預設：whisper）')
     url_parser.add_argument('--verbose', '-v', action='store_true', help='詳細輸出')
     url_parser.set_defaults(func=cmd_url)
     

@@ -202,6 +202,7 @@ def transcribe_audio(
     word_timestamps: bool = False,
     beam_size: int = 3,
     temperature: float = 0.0,
+    backend: str = "whisper",
 ) -> Tuple[str, dict]:
     """
     Transcribe audio file with Whisper.
@@ -224,6 +225,20 @@ def transcribe_audio(
         effective_model = model_size
 
     actual_language = None if language == "auto" else language
+
+    if backend == "nemotron":
+        return transcribe_audio_chunked(
+            audio_path=audio_path,
+            language=language,
+            model_size=model_size,
+            device=device,
+            compute_type=compute_type,
+            cpu_threads=cpu_threads,
+            vad_enabled=vad_enabled,
+            vad_params=vad_params,
+            word_timestamps=word_timestamps,
+            backend="nemotron",
+        )
 
     if vad_enabled and vad_params is None:
         vad_params = {
@@ -384,6 +399,7 @@ def transcribe_youtube_video(
     beam_size: int = 3,
     temperature: float = 0.0,
     include_timestamps: bool = False,
+    backend: str = "whisper",
 ) -> dict:
     """
     Download YouTube video and transcribe.
@@ -466,12 +482,13 @@ def transcribe_youtube_video(
             word_timestamps=include_timestamps,
             beam_size=beam_size,
             temperature=temperature,
+            backend=backend,
         )
 
         processing_time_ms = int((time.time() - start_time) * 1000)
 
         # Add source info to metadata
-        metadata["source"] = "whisper"
+        metadata["source"] = "nemotron-asr" if backend == "nemotron" else "whisper"
         metadata["processing_time_ms"] = processing_time_ms
         metadata["include_timestamps"] = include_timestamps
 
@@ -863,6 +880,7 @@ def transcribe_audio_chunked(
     auto_enable_threshold: int = DEFAULT_AUTO_CHUNK_THRESHOLD,
     beam_size: int = DEFAULT_CHUNK_BEAM_SIZE,
     temperature: float = DEFAULT_CHUNK_TEMPERATURE,
+    backend: str = "whisper",
 ) -> Tuple[str, dict]:
     """
     Transcribe audio with optional chunking for long files.
@@ -924,7 +942,28 @@ Returns:
         duration=duration,
         config=chunk_config,
     ) if duration else enable_chunking
-    
+
+    # Route to nemotron or whisper backend
+    if backend == "nemotron":
+        from api.backends.nemotron_backend import NemotronAsrBackend
+
+        nemotron_backend = NemotronAsrBackend(device=effective_device)
+        nemotron_backend.load_model(
+            model_size=None,
+            compute_type=effective_compute_type if effective_device != "cpu" else "float32",
+        )
+        actual_language = None if language == "auto" else language
+        transcript, metadata = nemotron_backend.transcribe(
+            audio_path=audio_path,
+            language=actual_language,
+            word_timestamps=word_timestamps,
+        )
+        metadata["backend"] = "nemotron-asr"
+        metadata["model"] = "nvidia/nemotron-3.5-asr-streaming-0.6b"
+        metadata["device"] = effective_device
+        metadata["audio_duration_seconds"] = duration
+        return transcript, metadata
+
     if not use_chunking:
         return transcribe_audio(
             audio_path=audio_path,

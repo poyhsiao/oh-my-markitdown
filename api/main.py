@@ -527,11 +527,12 @@ async def convert_youtube(
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
     return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
     quality_mode: str = Query("standard", description="Quality preset: fast, standard, best"),
+    backend: str = Query("whisper", description="Transcription backend: whisper or nemotron"),
     include_timestamps: bool = Query(False, description="Include timestamps in transcript"),
     device: str = Query(None, description="Compute device: auto, cpu, cuda, mps, rocm")
 ):
     """
-    Download YouTube video audio and transcribe using Whisper.
+    Download YouTube video audio and transcribe using Whisper or Nemotron ASR.
 
     **Parameters:**
     - **url**: YouTube video URL
@@ -646,10 +647,11 @@ async def transcribe_audio_file(
     language: str = Query("zh", description="Language code"),
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
     return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
-    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best")
+    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best"),
+    backend: str = Query("whisper", description="Transcription backend: whisper or nemotron"),
 ):
     """
-    Upload audio file and transcribe using Whisper.
+    Upload audio file and transcribe using Whisper or Nemotron ASR.
 
     **Parameters:**
     - **file**: Audio file (MP3, WAV, M4A, FLAC, etc.)
@@ -657,11 +659,12 @@ async def transcribe_audio_file(
     - **model_size**: Model size (auto=tiny/base/small based on duration)
     - **return_format**: Response format (markdown or json)
     - **quality_mode**: Quality preset (fast, standard, best)
+    - **backend**: Transcription backend — whisper (default) or nemotron
 
     **Auto-configured internally:**
     - Device: auto-detect (CUDA > MPS > CPU)
     - VAD: always enabled
-    - Chunking: auto-enabled for files > 90s
+    - Chunking: auto-enabled for files > 90s (whisper only)
     """
     from .constants import QUALITY_PRESETS
     from .device_utils import detect_device, get_compute_type_for_device, get_recommended_threads
@@ -693,6 +696,7 @@ async def transcribe_audio_file(
                 auto_enable_threshold=DEFAULT_AUTO_CHUNK_THRESHOLD,
                 beam_size=preset["beam_size"],
                 temperature=preset["temperature"],
+                backend=backend,
             )
 
             markdown_content = format_transcript_as_markdown(
@@ -737,10 +741,11 @@ async def transcribe_video_file(
     language: str = Query("auto", description="Language code"),
     model_size: str = Query("auto", description="Model size (auto, tiny, base, small, medium, large)"),
     return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
-    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best")
+    quality_mode: str = Query("standard", description="Quality preset: fast, standard, best"),
+    backend: str = Query("whisper", description="Transcription backend: whisper or nemotron"),
 ):
     """
-    Upload video file and transcribe using Whisper.
+    Upload video file and transcribe using Whisper or Nemotron ASR.
 
     **Parameters:**
     - **file**: Video file (MP4, MKV, WebM, AVI, MOV, FLV, TS)
@@ -798,6 +803,7 @@ async def transcribe_video_file(
                 auto_enable_threshold=DEFAULT_AUTO_CHUNK_THRESHOLD,
                 beam_size=preset["beam_size"],
                 temperature=preset["temperature"],
+                backend=backend,
             )
 
             metadata["source"] = "video"
@@ -1267,6 +1273,7 @@ async def convert_url(
     cpu_threads: int = Query(None, description="CPU thread count (auto-detect if None)"),
     vad_enabled: bool = Query(True, description="Enable VAD filtering"),
     return_format: str = Query("json", description="Response format: json (default), markdown, or download", pattern="^(json|markdown|download)$"),
+    backend: str = Query("whisper", description="Transcription backend: whisper or nemotron"),
 ):
     """
     Unified URL endpoint - auto-detects URL type and processes accordingly.
@@ -1313,6 +1320,7 @@ async def convert_url(
                 beam_size=3,
                 temperature=0.0,
                 include_timestamps=include_timestamps,
+                backend=backend,
             )
             
             markdown_content = format_transcript_as_markdown(
@@ -1435,15 +1443,16 @@ async def convert_url(
                     auto_enable_threshold=90,
                     beam_size=3,
                     temperature=0.0,
+                    backend=backend,
                 )
-                
+
                 markdown_content = format_transcript_as_markdown(
                     title=filename,
                     transcript=transcript,
                     metadata=metadata,
                     include_metadata=True
                 )
-                
+
                 return build_convert_response(
                     content=markdown_content,
                     metadata={
@@ -1483,7 +1492,7 @@ async def convert_url(
             audio_path = None
             try:
                 audio_path = extract_audio_from_video(video_path)
-                
+
                 transcript, metadata = transcribe_audio_chunked(
                     audio_path,
                     language=language if language != "auto" else "auto",
@@ -1498,15 +1507,16 @@ async def convert_url(
                     auto_enable_threshold=90,
                     beam_size=3,
                     temperature=0.0,
+                    backend=backend,
                 )
-                
+
                 markdown_content = format_transcript_as_markdown(
                     title=filename,
                     transcript=transcript,
                     metadata=metadata,
                     include_metadata=True
                 )
-                
+
                 return build_convert_response(
                     content=markdown_content,
                     metadata={
@@ -1521,7 +1531,7 @@ async def convert_url(
                     filename=f"{Path(filename).stem}.md",
                     request_id=request_id,
                 )
-            
+
             finally:
                 if os.path.exists(video_path):
                     os.unlink(video_path)
